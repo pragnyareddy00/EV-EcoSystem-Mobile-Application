@@ -1,52 +1,49 @@
-// app/_layout.tsx
-import AsyncStorage from '@react-native-async-storage/async-storage';
+// In app/_layout.tsx
 import { Slot, useRouter, useSegments } from 'expo-router';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
-import { auth } from '../config/firebaseConfig'; // Correct path based on your structure
+// Import AuthProvider and useAuth from their correct paths
+import { AuthProvider, useAuth } from '../context/AuthContext';
 
-export default function RootLayout() {
-  const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<User | null>(null);
-  const [hasOnboarded, setHasOnboarded] = useState<boolean | null>(null);
-  const router = useRouter();
+const InitialLayout = () => {
+  const { user, isLoading } = useAuth();
   const segments = useSegments();
+  const router = useRouter();
 
   useEffect(() => {
-    const checkOnboardingAndAuth = async () => {
-      const onboarded = await AsyncStorage.getItem('hasOnboarded');
-      setHasOnboarded(onboarded === 'true');
+    // If loading, don't do anything yet
+    if (isLoading) return;
 
-      const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-        setUser(currentUser);
-        setLoading(false);
-      });
-      return unsubscribe;
-    };
-    checkOnboardingAndAuth();
-  }, []);
+    const inAuthGroup = segments[0] === '(auth)';
 
-  useEffect(() => {
-    if (loading || hasOnboarded === null) return;
-
-
-    if (!hasOnboarded) {
-      router.replace('./onboarding');
-    } else if (!user) {
-      router.replace('./login');
-    } else {
-      router.replace('./home');
+    if (!user && !inAuthGroup) {
+      // If the user is not signed in and the initial segment is not '(auth)',
+      // redirect them to the login page.
+      router.replace('/(auth)/login');
+    } else if (user && inAuthGroup) {
+      // If the user is signed in and is in the auth group (e.g., on the login page),
+      // redirect them to the home page.
+      router.replace('/(tabs)/home');
     }
-  }, [loading, user, hasOnboarded]);
+  }, [user, isLoading, segments]);
 
-  if (loading || hasOnboarded === null) {
+  // While checking for user, show a loading screen
+  if (isLoading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1A202C' }}>
-        <ActivityIndicator size="large" color="#00C6FF" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" />
       </View>
     );
   }
 
-  return <Slot />; // Renders the current child route
+  // Render the current screen
+  return <Slot />;
+};
+
+export default function RootLayout() {
+  return (
+    <AuthProvider>
+      <InitialLayout />
+    </AuthProvider>
+  );
 }
