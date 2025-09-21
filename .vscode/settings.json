@@ -3,5 +3,9 @@
     "source.fixAll": "explicit",
     "source.organizeImports": "explicit",
     "source.sortMembers": "explicit"
-  }
+  },
+  "postman.settings.dotenv-detection-notification-visibility": false,
+  "cSpell.words": [
+    "flatlist"
+  ]
 }
