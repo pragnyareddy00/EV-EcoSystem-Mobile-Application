@@ -3,7 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Stack } from 'expo-router';
 import React from 'react';
 import { TouchableOpacity } from 'react-native';
-import { auth } from '../../config/firebaseConfig'; // Adjust path if needed
+import { auth } from '../../services/firebase'; // Adjust path if needed
 
 export default function TabsLayout() {
   const handleSignOut = () => {
