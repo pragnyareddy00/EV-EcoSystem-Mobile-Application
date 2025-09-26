@@ -3,7 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Dimensions,
@@ -16,6 +16,7 @@ import {
   View
 } from 'react-native';
 import Onboarding from 'react-native-onboarding-swiper';
+import { useAuth } from '../context/AuthContext';
 
 // Get screen dimensions
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -87,7 +88,18 @@ const CustomSkipButton: React.FC<SkipButtonProps> = ({ onPress }) => (
 // --- Main Onboarding Screen ---
 const OnboardingScreen: React.FC = () => {
   const router = useRouter();
+  const { user, isLoading: authLoading } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    console.log('Index: User:', user, 'Loading:', authLoading);
+    if (authLoading) return;
+
+    if (user) {
+      // If user is logged in, redirect to home screen
+      router.replace('/(tabs)/home');
+    }
+  }, [user, authLoading, router]);
 
   const handleComplete = async () => {
     if (isLoading) return;

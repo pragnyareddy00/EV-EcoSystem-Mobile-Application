@@ -1,53 +1,74 @@
-// app/(auth)/login.tsx
+// app/(auth)/signup.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-// --- MODIFICATION: Import the correct Firebase function ---
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
 import React, { useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Platform,
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    KeyboardAvoidingView,
+    Platform,
+    SafeAreaView,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { Card, StyledButton, StyledTextInput } from '../../components/StyledComponents';
 import { COLORS, FONTS, SPACING } from '../../constants/colors';
-// --- MODIFICATION: Import only 'auth' from firebase service ---
-import { auth } from '../../services/firebase';
+import { auth, db } from '../../services/firebase'; // Import both auth and db
 
-export default function LoginScreen() {
+export default function SignUpScreen() {
   const router = useRouter();
 
-  // --- MODIFICATION: State for email and password ---
+  const [username, setUsername] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // --- MODIFICATION: New login handler ---
-  const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) {
-      setError('Please enter both email and password.');
+  const handleSignUp = async () => {
+    // Basic validation
+    if (!username.trim() || !phoneNumber.trim() || !email.trim() || !password.trim()) {
+      setError('Please fill in all fields.');
       return;
     }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters long.');
+      return;
+    }
+
     setIsLoading(true);
     setError('');
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      // On success, AuthContext will handle the redirect to the home screen.
+      // Step 1: Create the user in Firebase Authentication
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      // Step 2: Save additional user info to Firestore
+      // We use the user's UID as the document ID in the 'users' collection
+      await setDoc(doc(db, 'users', user.uid), {
+        username: username,
+        phoneNumber: phoneNumber,
+        email: email, // Storing email here is good practice
+        createdAt: new Date(),
+      });
+
+      // On success, the AuthContext will automatically redirect to the home screen.
+      // No manual navigation is needed here.
+
     } catch (error: any) {
-      console.error('Login error:', error);
-      if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
-        setError('Invalid email or password. Please try again.');
+      console.error('Sign up error:', error);
+      if (error.code === 'auth/email-already-in-use') {
+        setError('This email address is already in use.');
+      } else if (error.code === 'auth/weak-password') {
+        setError('The password is too weak.');
       } else {
-        setError('An error occurred. Please try again later.');
+        setError('Failed to create an account. Please try again.');
       }
     } finally {
       setIsLoading(false);
@@ -72,24 +93,30 @@ export default function LoginScreen() {
           <View style={styles.header}>
             <View style={styles.logoContainer}>
               <View style={styles.logoCircle}>
-                <Ionicons name="car" size={40} color={COLORS.primary} />
+                <Ionicons name="person-add" size={40} color={COLORS.primary} />
               </View>
             </View>
-            <Text style={styles.brandName}>EVOS</Text>
-            <Text style={styles.tagline}>Electric Vehicle EcoSystem for Navigation</Text>
+            <Text style={styles.brandName}>Create Account</Text>
+            <Text style={styles.tagline}>Join the EVOS community today</Text>
           </View>
 
-          {/* Login Card */}
-          <Card style={styles.loginCard}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.title}>Welcome Back!</Text>
-              <Text style={styles.subtitle}>
-                Sign in to continue your EV journey
-              </Text>
-            </View>
-
+          {/* Sign Up Card */}
+          <Card style={styles.signUpCard}>
             <View style={styles.form}>
-              {/* --- MODIFICATION: Email Input --- */}
+              <StyledTextInput
+                label="Username"
+                placeholder="e.g., Abhinav Reddy"
+                value={username}
+                onChangeText={setUsername}
+                error={error.includes('fields') ? error : ''}
+              />
+              <StyledTextInput
+                label="Phone Number"
+                placeholder="e.g., 9876543210"
+                value={phoneNumber}
+                onChangeText={setPhoneNumber}
+                keyboardType="phone-pad"
+              />
               <StyledTextInput
                 label="Email Address"
                 placeholder="you@example.com"
@@ -97,34 +124,33 @@ export default function LoginScreen() {
                 onChangeText={setEmail}
                 keyboardType="email-address"
                 autoCapitalize="none"
-                error={error ? ' ' : ''} // Reserve space for error
+                error={error.includes('email') ? error : ''}
               />
-              {/* --- MODIFICATION: Password Input --- */}
               <StyledTextInput
                 label="Password"
-                placeholder="Enter your password"
+                placeholder="Min. 6 characters"
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
-                error={error} // Show the actual error message here
+                error={error.includes('Password') || error.includes('password') ? error : ''}
               />
 
               <StyledButton
-                title="Sign In"
-                onPress={handleLogin}
+                title="Create Account"
+                onPress={handleSignUp}
                 loading={isLoading}
                 disabled={isLoading}
-                style={styles.loginButton}
+                style={styles.signUpButton}
               />
             </View>
           </Card>
 
-          {/* Footer to navigate to Sign Up */}
+          {/* Footer */}
           <View style={styles.footer}>
-            <TouchableOpacity onPress={() => router.push('./signup')}>
+            <TouchableOpacity onPress={() => router.back()}>
               <Text style={styles.footerText}>
-                Don't have an account?{' '}
-                <Text style={styles.signUpLink}>Sign Up</Text>
+                Already have an account?{' '}
+                <Text style={styles.signInLink}>Sign In</Text>
               </Text>
             </TouchableOpacity>
           </View>
@@ -148,7 +174,7 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    paddingTop: SPACING.xxl,
+    paddingTop: SPACING.xl,
     paddingBottom: SPACING.xl,
   },
   logoContainer: {
@@ -166,53 +192,32 @@ const styles = StyleSheet.create({
     fontSize: FONTS.sizes.display,
     fontWeight: 'bold',
     color: COLORS.textPrimary,
-    letterSpacing: 2,
   },
   tagline: {
-    fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    marginTop: SPACING.xs,
-    maxWidth: 250,
-  },
-  loginCard: {
-    marginBottom: SPACING.xl,
-  },
-  cardHeader: {
-    marginBottom: SPACING.lg,
-  },
-  title: {
-    fontSize: FONTS.sizes.xxl,
-    fontWeight: 'bold',
-    color: COLORS.textPrimary,
-    textAlign: 'center',
-    marginBottom: SPACING.sm,
-  },
-  subtitle: {
     fontSize: FONTS.sizes.base,
     color: COLORS.textSecondary,
-    textAlign: 'center',
-    lineHeight: 22,
+    marginTop: SPACING.sm,
+  },
+  signUpCard: {
+    marginBottom: SPACING.xl,
   },
   form: {
     gap: SPACING.md,
   },
-  loginButton: {
-    marginTop: SPACING.sm,
+  signUpButton: {
+    marginTop: SPACING.md,
   },
   footer: {
     alignItems: 'center',
     paddingVertical: SPACING.lg,
-    marginTop: 'auto',
   },
   footerText: {
     fontSize: FONTS.sizes.sm,
     color: COLORS.textSecondary,
     textAlign: 'center',
   },
-  signUpLink: {
+  signInLink: {
     color: COLORS.primary,
     fontWeight: '600',
   },
 });
-

@@ -1,48 +1,48 @@
 // In context/AuthContext.tsx
 import { onAuthStateChanged, User } from 'firebase/auth';
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { auth } from '../config/firebaseConfig'; // Adjust the path if necessary
+// This import path must be correct
+import { auth } from '../services/firebase';
 
-// Define the shape of the context data
+// --- START DIAGNOSTIC LOGS ---
+console.log("--- AuthContext File Loaded ---");
+console.log("Is 'auth' object imported successfully?", auth ? "Yes, it exists." : "No, it is UNDEFINED!");
+if (auth) {
+  console.log("Does auth object have onAuthStateChanged function?", typeof auth.onAuthStateChanged === 'function' ? "Yes" : "No, it's missing!");
+}
+// --- END DIAGNOSTIC LOGS ---
+
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
 }
 
-// Create the context with a default value
 const AuthContext = createContext<AuthContextType>({
   user: null,
   isLoading: true,
 });
 
-/**
- * Custom hook to use the AuthContext.
- * This makes it easier to access the user and loading state from any component.
- * e.g., const { user, isLoading } = useAuth();
- */
 export const useAuth = () => {
   return useContext(AuthContext);
 };
 
-/**
- * The AuthProvider component that will wrap your entire application.
- * It listens to Firebase's authentication state changes and provides the user
- * data to its children.
- */
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // onAuthStateChanged returns an unsubscribe function
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      // When the auth state changes (login/logout), update our state
-      setUser(currentUser);
-      setIsLoading(false);
-    });
-
-    // Cleanup subscription on unmount
-    return () => unsubscribe();
+    // This try/catch will give us a more specific error if the function call itself fails
+    try {
+      console.log("Attempting to call onAuthStateChanged...");
+      const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+        console.log("Auth state has changed. Current user:", currentUser ? currentUser.uid : null);
+        setUser(currentUser);
+        setIsLoading(false);
+      });
+      return () => unsubscribe();
+    } catch (e) {
+      console.error("!!! CRITICAL ERROR calling onAuthStateChanged:", e);
+    }
   }, []);
 
   const value = {
@@ -50,6 +50,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     isLoading,
   };
 
-  // Provide the user and loading state to the rest of the app
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
+
