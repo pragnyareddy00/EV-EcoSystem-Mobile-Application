@@ -1,2 +1,4 @@
 - [x] Fix navigation in app/(auth)/login.tsx: Change router.push('./(auth)/signup') to router.push('./signup')
 - [ ] Test the navigation to ensure signup page loads correctly
+- [x] Add version display in profile screen reflecting app.json
+- [ ] Test the profile screen and version display

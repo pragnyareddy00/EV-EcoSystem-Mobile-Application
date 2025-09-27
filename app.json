@@ -20,7 +20,12 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.abhinav031.EVEcoSystemMobileApplication"
+      "package": "com.abhinav031.EVEcoSystemMobileApplication",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyDpgh5Z4v3vf1Y2tTaal-BmrhcFfcL5UP0"
+        }
+      }
     },
     "web": {
       "output": "static",

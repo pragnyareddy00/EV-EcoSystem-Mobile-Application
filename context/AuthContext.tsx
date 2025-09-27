@@ -1,25 +1,35 @@
-// In context/AuthContext.tsx
 import { onAuthStateChanged, User } from 'firebase/auth';
+import { doc, DocumentData, getDoc } from 'firebase/firestore';
 import React, { createContext, useContext, useEffect, useState } from 'react';
-// This import path must be correct
-import { auth } from '../services/firebase';
+import { auth, db } from '../services/firebase';
 
-// --- START DIAGNOSTIC LOGS ---
-console.log("--- AuthContext File Loaded ---");
-console.log("Is 'auth' object imported successfully?", auth ? "Yes, it exists." : "No, it is UNDEFINED!");
-if (auth) {
-  console.log("Does auth object have onAuthStateChanged function?", typeof auth.onAuthStateChanged === 'function' ? "Yes" : "No, it's missing!");
+export interface UserProfile extends DocumentData {
+  uid: string;
+  username: string;
+  email: string;
+  phoneNumber: string;
+  vehicle?: {
+    make: string;
+    model: string;
+    batteryCapacityKWh: number;
+    realWorldRangeKm: number;
+  };
 }
-// --- END DIAGNOSTIC LOGS ---
 
 interface AuthContextType {
   user: User | null;
+  userProfile: UserProfile | null;
   isLoading: boolean;
+  refreshUserProfile: () => Promise<void>;
 }
 
+// --- THIS LINE HAS BEEN FIXED ---
+// The type is now correctly spelled as "AuthContextType"
 const AuthContext = createContext<AuthContextType>({
   user: null,
+  userProfile: null,
   isLoading: true,
+  refreshUserProfile: async () => {}, // Provide a default empty function
 });
 
 export const useAuth = () => {
@@ -28,26 +38,41 @@ export const useAuth = () => {
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    // This try/catch will give us a more specific error if the function call itself fails
-    try {
-      console.log("Attempting to call onAuthStateChanged...");
-      const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-        console.log("Auth state has changed. Current user:", currentUser ? currentUser.uid : null);
-        setUser(currentUser);
-        setIsLoading(false);
-      });
-      return () => unsubscribe();
-    } catch (e) {
-      console.error("!!! CRITICAL ERROR calling onAuthStateChanged:", e);
+  const fetchUserProfile = async (currentUser: User | null) => {
+    if (currentUser) {
+      const userDocRef = doc(db, 'users', currentUser.uid);
+      const userDoc = await getDoc(userDocRef);
+      if (userDoc.exists()) {
+        setUserProfile({ uid: currentUser.uid, ...userDoc.data() } as UserProfile);
+      }
+    } else {
+      setUserProfile(null);
     }
+  };
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      await fetchUserProfile(currentUser);
+      setIsLoading(false);
+    });
+    return () => unsubscribe();
   }, []);
+
+  const refreshUserProfile = async () => {
+    if (user) {
+      await fetchUserProfile(user);
+    }
+  };
 
   const value = {
     user,
+    userProfile,
     isLoading,
+    refreshUserProfile,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
