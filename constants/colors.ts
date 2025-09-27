@@ -7,9 +7,9 @@ export const COLORS = {
   accent: '#3B82F6',         // Blue accent for links/highlights
   
   // Background colors
-  background: '#FFFFFF',     // Clean white background
+  background: '#FFFFFF',      // Clean white background
   backgroundLight: '#F8FAFC', // Very light gray for subtle sections
-  backgroundDark: '#0F172A', // Dark background (for future dark mode)
+  backgroundDark: '#0F172A',  // Dark background (for future dark mode)
   
   // Text colors
   textPrimary: '#1E293B',    // Main text color
@@ -23,6 +23,7 @@ export const COLORS = {
   success: '#10B981',        // Success messages
   warning: '#F59E0B',        // Warning messages  
   error: '#EF4444',          // Error messages
+  white: '#FFFFFF',          // General white color token
   
   // Transparency overlays
   overlay: 'rgba(0, 0, 0, 0.5)',

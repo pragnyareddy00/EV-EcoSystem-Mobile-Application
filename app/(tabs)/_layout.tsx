@@ -1,29 +1,69 @@
-// In app/(tabs)/_layout.tsx
 import { Ionicons } from '@expo/vector-icons';
-import { Stack } from 'expo-router';
+import { Tabs } from 'expo-router';
 import React from 'react';
-import { TouchableOpacity } from 'react-native';
-import { auth } from '../../services/firebase'; // Adjust path if needed
+import { COLORS } from '../../constants/colors';
 
 export default function TabsLayout() {
-  const handleSignOut = () => {
-    auth.signOut();
-  };
-
   return (
-    <Stack>
-      <Stack.Screen
+    <Tabs
+      screenOptions={{
+        tabBarActiveTintColor: COLORS.primary,
+        tabBarInactiveTintColor: COLORS.textMuted,
+        tabBarStyle: {
+          backgroundColor: COLORS.white,
+          borderTopWidth: 1,
+          borderTopColor: COLORS.border,
+          height: 60,
+          paddingBottom: 5,
+        },
+        headerStyle: {
+          backgroundColor: COLORS.white,
+          elevation: 0,
+          shadowOpacity: 0,
+        },
+        headerTitleStyle: {
+          fontWeight: 'bold',
+        },
+      }}
+    >
+      <Tabs.Screen
         name="home"
         options={{
-          title: 'EVOS Home',
-          headerRight: () => (
-            <TouchableOpacity onPress={handleSignOut} style={{ marginRight: 15 }}>
-              <Ionicons name="log-out-outline" size={24} color="black" />
-            </TouchableOpacity>
-          ),
+          title: 'Home',
+          headerShown: false, // We will create a custom header on the home screen
+          tabBarIcon: ({ color, size }) => <Ionicons name="home-outline" color={color} size={size} />,
         }}
       />
-      {/* You can add more screens for your main app here */}
-    </Stack>
+      <Tabs.Screen
+        name="routing"
+        options={{
+          title: 'Routing',
+          tabBarIcon: ({ color, size }) => <Ionicons name="map-outline" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="sos"
+        options={{
+          title: 'SOS',
+          tabBarIcon: ({ color, size }) => <Ionicons name="warning-outline" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Profile',
+          tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" color={color} size={size} />,
+        }}
+      />
+      {/* This screen will be hidden from the tab bar but we can navigate to it */}
+      <Tabs.Screen
+        name="addVehicle"
+        options={{
+          href: null, // Hides this screen from the tab bar
+          title: 'Add Your Vehicle',
+        }}
+      />
+    </Tabs>
   );
 }
+

@@ -6,16 +6,23 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "GOOGLE_MAPS_API_KEY": "AIzaSyDpgh5Z4v3vf1Y2tTaal-BmrhcFfcL5UP0"
+      }
     },
     "preview": {
       "distribution": "internal"
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "GOOGLE_MAPS_API_KEY": "AIzaSyDpgh5Z4v3vf1Y2tTaal-BmrhcFfcL5UP0"
+      }
     }
   },
   "submit": {
     "production": {}
   }
 }
+
