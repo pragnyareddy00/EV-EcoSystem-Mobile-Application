@@ -12,6 +12,11 @@ export interface Station {
   // We'll add default values for these properties for now
   connectorType: 'CCS-2' | 'CHAdeMO' | 'Type 2 AC' | 'Unknown';
   isAvailable: boolean;
+  type: 'fast' | 'slow' | 'swap';
+  power: number;
+  status: 'available' | 'occupied' | 'maintenance';
+  services?: string[];
+  distance?: number; // Added for dynamic distance calculation
 }
 
 // --- Step 2: This function processes the raw data from your JSON ---
@@ -26,11 +31,15 @@ function processRawData(rawData: any[]): Station[] {
     address: station.address || 'Address not available',
     // The map needs latitude and longitude to be numbers, not text.
     // parseFloat() converts the text from your file into a number.
-    latitude: parseFloat(station.lattitude), 
+    latitude: parseFloat(station.lattitude),
     longitude: parseFloat(station.longitude),
     // We add default values for these properties
     connectorType: 'Unknown',
-    isAvailable: true, 
+    isAvailable: true,
+    type: 'fast', // default type
+    power: 50, // default power in kW
+    status: 'available', // default status
+    services: [], // default services
   }));
 }
 
