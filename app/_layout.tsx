@@ -20,8 +20,12 @@ const InitialLayout = () => {
       // If the user is not signed in and the initial segment is not '(auth)',
       // redirect them to the login page.
       router.replace('/(auth)/login');
-    } else if (user && inAuthGroup) {
-      // If the user is signed in and is in the auth group (e.g., on the login page),
+    } else if (user && !user.emailVerified && !inAuthGroup) {
+      // If the user is signed in but email not verified, and not in auth group,
+      // redirect to verify email.
+      router.replace('/(auth)/verify-email');
+    } else if (user && user.emailVerified && inAuthGroup) {
+      // If the user is signed in, email verified, and in auth group,
       // redirect them to the home page.
       router.replace('/(tabs)/home');
     }

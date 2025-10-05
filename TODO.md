@@ -1,2 +1,2 @@
-- [x] Update constants/stations.ts to include missing properties in Station interface (type, power, status, services) and add defaults in processing
-- [ ] Test the app to verify stations display correctly on the home screen
+- [x] Update app/_layout.tsx to enforce email verification before allowing access to main app
+- [ ] Test the signup and verification flow

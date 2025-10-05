@@ -1,4 +1,4 @@
-import { onAuthStateChanged, User } from 'firebase/auth';
+import { onAuthStateChanged, User, signOut } from 'firebase/auth';
 import { doc, DocumentData, getDoc } from 'firebase/firestore';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { auth, db } from '../services/firebase';
@@ -21,6 +21,7 @@ interface AuthContextType {
   userProfile: UserProfile | null;
   isLoading: boolean;
   refreshUserProfile: () => Promise<void>;
+  onLogout: () => Promise<void>;
 }
 
 // --- THIS LINE HAS BEEN FIXED ---
@@ -30,6 +31,7 @@ const AuthContext = createContext<AuthContextType>({
   userProfile: null,
   isLoading: true,
   refreshUserProfile: async () => {}, // Provide a default empty function
+  onLogout: async () => {},
 });
 
 export const useAuth = () => {
@@ -68,11 +70,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const onLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
+
   const value = {
     user,
     userProfile,
     isLoading,
     refreshUserProfile,
+    onLogout,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -1,23 +1,24 @@
 // app/(auth)/signup.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+// --- 1. Import new functions from firebase ---
+import { createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import React, { useState } from 'react';
 import {
-    KeyboardAvoidingView,
-    Platform,
-    SafeAreaView,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { Card, StyledButton, StyledTextInput } from '../../components/StyledComponents';
 import { COLORS, FONTS, SPACING } from '../../constants/colors';
-import { auth, db } from '../../services/firebase'; // Import both auth and db
+import { auth, db } from '../../services/firebase';
 
 export default function SignUpScreen() {
   const router = useRouter();
@@ -31,13 +32,13 @@ export default function SignUpScreen() {
   const [error, setError] = useState('');
 
   const handleSignUp = async () => {
-    // Basic validation
     if (!username.trim() || !phoneNumber.trim() || !email.trim() || !password.trim()) {
       setError('Please fill in all fields.');
       return;
     }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters long.');
+    // --- 2. Changed password length from 6 to 8 ---
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters long.');
       return;
     }
 
@@ -45,21 +46,25 @@ export default function SignUpScreen() {
     setError('');
 
     try {
-      // Step 1: Create the user in Firebase Authentication
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // Step 2: Save additional user info to Firestore
-      // We use the user's UID as the document ID in the 'users' collection
+      // --- 3. Send the verification email ---
+      await sendEmailVerification(user);
+
+      // --- 4. Add the 'role' field to the user's profile in Firestore ---
       await setDoc(doc(db, 'users', user.uid), {
         username: username,
         phoneNumber: phoneNumber,
-        email: email, // Storing email here is good practice
+        email: email,
+        role: 'user', // Add this line for the Admin Panel feature
         createdAt: new Date(),
       });
 
-      // On success, the AuthContext will automatically redirect to the home screen.
-      // No manual navigation is needed here.
+      // --- 5. Navigate user to the new verification screen ---
+      // The AuthContext will still see them as logged in, but the main layout
+      // will eventually block them until they are verified.
+      router.replace('/(auth)/verify-email');
 
     } catch (error: any) {
       console.error('Sign up error:', error);
@@ -128,7 +133,8 @@ export default function SignUpScreen() {
               />
               <StyledTextInput
                 label="Password"
-                placeholder="Min. 6 characters"
+                // --- 6. Updated placeholder text ---
+                placeholder="Min. 8 characters"
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
@@ -221,3 +227,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+
