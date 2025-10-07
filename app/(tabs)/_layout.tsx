@@ -2,8 +2,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import React from 'react';
 import { COLORS } from '../../constants/colors';
+import { useAuth } from '../../context/AuthContext';
 
 export default function TabsLayout() {
+  const { userProfile } = useAuth();
+  
   return (
     <Tabs
       screenOptions={{
@@ -55,7 +58,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" color={color} size={size} />,
         }}
       />
-      {/* This screen will be hidden from the tab bar but we can navigate to it */}
+      {/* These screens will be hidden from the tab bar but we can navigate to them */}
       <Tabs.Screen
         name="addVehicle"
         options={{
@@ -63,6 +66,23 @@ export default function TabsLayout() {
           title: 'Add Your Vehicle',
         }}
       />
+      <Tabs.Screen
+        name="addStation"
+        options={{
+          href: null, // Hides this screen from the tab bar
+          title: 'Add Station',
+        }}
+      />
+      {/* Admin tab - only visible to admin users */}
+      {userProfile?.role === 'admin' && (
+        <Tabs.Screen
+          name="admin"
+          options={{
+            title: 'Admin',
+            tabBarIcon: ({ color, size }) => <Ionicons name="settings-outline" color={color} size={size} />,
+          }}
+        />
+      )}
     </Tabs>
   );
 }

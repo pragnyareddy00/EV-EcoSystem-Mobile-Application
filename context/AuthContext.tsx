@@ -8,6 +8,7 @@ export interface UserProfile extends DocumentData {
   username: string;
   email: string;
   phoneNumber: string;
+  role?: 'user' | 'admin';  // Added role field
   vehicle?: {
     make: string;
     model: string;

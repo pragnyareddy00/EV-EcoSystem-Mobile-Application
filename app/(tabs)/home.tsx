@@ -16,7 +16,7 @@ import {
   View,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
-import { COLORS, FONTS, SPACING } from '../../constants/colors';
+import { COLORS } from '../../constants/colors';
 import { mockStations, Station } from '../../constants/stations';
 import { useAuth } from '../../context/AuthContext';
 
@@ -31,10 +31,10 @@ export default function HomeScreen() {
   const [permissionError, setPermissionError] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
-  const [mapHeight] = useState(new Animated.Value(0.7)); // 70% initially
+  const [mapHeight] = useState(new Animated.Value(0.60)); // 60% initially
   const [isMapExpanded, setIsMapExpanded] = useState(true);
   const [socModalVisible, setSocModalVisible] = useState(false);
-  const [currentSoC, setCurrentSoC] = useState(85); // Default 85%
+  const [currentSoC, setCurrentSoC] = useState(85);
   const [tempSoC, setTempSoC] = useState('85');
   const [nearestStations, setNearestStations] = useState<Station[]>([]);
 
@@ -69,7 +69,7 @@ export default function HomeScreen() {
   }, []);
 
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-    const R = 6371; // Earth's radius in kilometers
+    const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
     const a =
@@ -136,7 +136,7 @@ export default function HomeScreen() {
   };
 
   const toggleMapSize = () => {
-    const newHeight = isMapExpanded ? 0.4 : 0.7;
+    const newHeight = isMapExpanded ? 0.35 : 0.60;
     Animated.timing(mapHeight, {
       toValue: newHeight,
       duration: 300,
@@ -189,9 +189,9 @@ export default function HomeScreen() {
   };
 
   const getSoCColor = () => {
-    if (currentSoC > 50) return COLORS.success || '#4CAF50';
-    if (currentSoC > 20) return COLORS.warning || '#FF9800';
-    return COLORS.error || '#f44336';
+    if (currentSoC > 50) return '#10b981';
+    if (currentSoC > 20) return '#f59e0b';
+    return '#ef4444';
   };
 
   const getSoCStatus = () => {
@@ -201,12 +201,22 @@ export default function HomeScreen() {
     return 'Critical';
   };
 
+  const getStationIconName = (type: string) => {
+    if (type === 'fast') return 'flash';
+    if (type === 'swap') return 'repeat';
+    return 'battery-charging';
+  };
+
   if (permissionError) {
     return (
       <View style={styles.centered}>
-        <Ionicons name="location-outline" size={60} color={COLORS.textSecondary} />
-        <Text style={styles.errorText}>Location permission is required to display the map.</Text>
+        <View style={styles.errorIconContainer}>
+          <Ionicons name="location-outline" size={56} color="#94a3b8" />
+        </View>
+        <Text style={styles.errorTitle}>Location Access Required</Text>
+        <Text style={styles.errorText}>We need your location to show nearby charging stations and provide the best EV experience.</Text>
         <TouchableOpacity style={styles.retryButton} onPress={requestLocation}>
+          <Ionicons name="location" size={18} color="#fff" style={styles.buttonIcon} />
           <Text style={styles.retryText}>Enable Location</Text>
         </TouchableOpacity>
       </View>
@@ -261,32 +271,32 @@ export default function HomeScreen() {
             >
               <View style={[
                 styles.markerContainer,
-                { backgroundColor: station.status === 'available' ? COLORS.success || '#4CAF50' : COLORS.error || '#f44336' }
+                { backgroundColor: station.status === 'available' ? '#10b981' : '#ef4444' }
               ]}>
                 <Ionicons
-                  name={(station.type === 'fast' ? 'flash' : station.type === 'swap' ? 'battery-charging' : 'plug') as keyof typeof Ionicons.glyphMap}
+                  name={getStationIconName(station.type) as keyof typeof Ionicons.glyphMap}
                   size={16}
-                  color={COLORS.white}
+                  color="#ffffff"
                 />
               </View>
             </Marker>
           ))}
         </MapView>
 
-        {/* Floating Search Bar */}
+        {/* Compact Search Bar */}
         <View style={styles.searchContainer}>
           <View style={styles.searchBar}>
-            <Ionicons name="search" size={20} color={COLORS.textSecondary} />
+            <Ionicons name="search" size={18} color="#64748b" />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search EV stations..."
+              placeholder="Search stations..."
               value={searchQuery}
               onChangeText={handleSearch}
-              placeholderTextColor={COLORS.textSecondary}
+              placeholderTextColor="#94a3b8"
             />
             {searchQuery !== '' && (
               <TouchableOpacity onPress={() => handleSearch('')}>
-                <Ionicons name="close" size={20} color={COLORS.textSecondary} />
+                <Ionicons name="close-circle" size={18} color="#94a3b8" />
               </TouchableOpacity>
             )}
           </View>
@@ -294,14 +304,16 @@ export default function HomeScreen() {
           {isSearching && (
             <View style={styles.searchResults}>
                {filteredStations.length > 0 ? (
-                 filteredStations.slice(0, 5).map(station => (
+                 filteredStations.slice(0, 4).map(station => (
                   <TouchableOpacity
                     key={station.id}
                     style={styles.searchResultItem}
                     onPress={() => navigateToStation(station)}
                   >
                     <View style={styles.searchResultLeft}>
-                      <Ionicons name="location" size={16} color={COLORS.primary} />
+                      <View style={[styles.searchResultIcon, { backgroundColor: station.status === 'available' ? '#dcfce7' : '#fee2e2' }]}>
+                        <Ionicons name="location" size={14} color={station.status === 'available' ? '#10b981' : '#ef4444'} />
+                      </View>
                       <View style={styles.searchResultText}>
                         <Text style={styles.searchResultName}>{station.name}</Text>
                         <Text style={styles.searchResultAddress} numberOfLines={1}>
@@ -309,37 +321,40 @@ export default function HomeScreen() {
                         </Text>
                       </View>
                     </View>
-                    <Ionicons name="chevron-forward" size={16} color={COLORS.textSecondary} />
+                    <Ionicons name="arrow-forward" size={16} color="#64748b" />
                   </TouchableOpacity>
                 ))
                ) : (
                 <View style={styles.noResults}>
-                  <Text style={styles.noResultsText}>No stations found.</Text>
+                  <Ionicons name="search-outline" size={28} color="#cbd5e1" />
+                  <Text style={styles.noResultsText}>No stations found</Text>
                 </View>
                )}
             </View>
           )}
         </View>
 
-        {/* SoC Indicator */}
+        {/* Compact SoC Indicator */}
         <TouchableOpacity
           style={styles.socContainer}
           onPress={() => setSocModalVisible(true)}
+          activeOpacity={0.8}
         >
-          <View style={styles.socHeader}>
-            <Ionicons name="battery-charging" size={16} color={getSoCColor()} />
-            <Text style={styles.socLabel}>SoC</Text>
+          <View style={[styles.socCard, { borderLeftColor: getSoCColor() }]}>
+            <View style={styles.socTop}>
+              <Ionicons name="battery-charging" size={16} color={getSoCColor()} />
+              <Text style={[styles.socValue, { color: getSoCColor() }]}>{currentSoC}%</Text>
+            </View>
+            <Text style={styles.socRange}>{Math.round(currentSoC * 4.2)}km</Text>
           </View>
-          <Text style={[styles.socValue, { color: getSoCColor() }]}>{currentSoC}%</Text>
-          <Text style={styles.socStatus}>{getSoCStatus()}</Text>
         </TouchableOpacity>
 
-        {/* Map Toggle Button */}
-        <TouchableOpacity style={styles.mapToggle} onPress={toggleMapSize}>
+        {/* Compact Map Toggle */}
+        <TouchableOpacity style={styles.mapToggle} onPress={toggleMapSize} activeOpacity={0.8}>
           <Ionicons
             name={isMapExpanded ? 'chevron-down' : 'chevron-up'}
             size={20}
-            color={COLORS.white}
+            color="#fff"
           />
         </TouchableOpacity>
       </Animated.View>
@@ -347,37 +362,43 @@ export default function HomeScreen() {
       {/* Bottom Content Section */}
       <Animated.View style={[styles.bottomContainer, {
           flex: mapHeight.interpolate({
-            inputRange: [0.4, 0.7],
-            outputRange: [0.6, 0.3]
+            inputRange: [0.35, 0.60],
+            outputRange: [0.65, 0.40]
           })
       }]}>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Welcome Header */}
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+          {/* Compact Header */}
           <View style={styles.header}>
-            <View>
-              <Text style={styles.welcomeText}>Hello, {userProfile.username}! ⚡</Text>
-              <Text style={styles.carText}>
-                {userProfile.vehicle.make} {userProfile.vehicle.model}
-              </Text>
+            <View style={styles.headerLeft}>
+              <Text style={styles.welcomeText}>Hello, {userProfile.username}!</Text>
+              <View style={styles.carInfo}>
+                <Ionicons name="car-sport" size={12} color="#64748b" />
+                <Text style={styles.carText}>
+                  {userProfile.vehicle.make} {userProfile.vehicle.model}
+                </Text>
+              </View>
             </View>
             <TouchableOpacity
               style={styles.profileButton}
               onPress={() => router.push('/(tabs)/profile')}
             >
-              <Ionicons name="person-circle" size={32} color={COLORS.primary} />
+              <View style={styles.profileAvatar}>
+                <Ionicons name="person" size={18} color={COLORS.primary} />
+              </View>
             </TouchableOpacity>
           </View>
 
-          {/* Quick Actions */}
+          {/* Compact Quick Actions */}
           <View style={styles.quickActions}>
             <Text style={styles.sectionTitle}>Quick Actions</Text>
             <View style={styles.actionGrid}>
               <TouchableOpacity
                 style={styles.actionButton}
                 onPress={() => handleQuickAction('findCharger')}
+                activeOpacity={0.7}
               >
-                <View style={[styles.actionIcon, { backgroundColor: COLORS.primary }]}>
-                  <Ionicons name="flash" size={24} color={COLORS.white} />
+                <View style={[styles.actionIconContainer, styles.actionPrimary]}>
+                  <Ionicons name="flash" size={20} color="#fff" />
                 </View>
                 <Text style={styles.actionLabel}>Find Charger</Text>
               </TouchableOpacity>
@@ -385,9 +406,10 @@ export default function HomeScreen() {
               <TouchableOpacity
                 style={styles.actionButton}
                 onPress={() => handleQuickAction('routePlan')}
+                activeOpacity={0.7}
               >
-                <View style={[styles.actionIcon, { backgroundColor: '#2196F3' }]}>
-                  <Ionicons name="navigate" size={24} color={COLORS.white} />
+                <View style={[styles.actionIconContainer, styles.actionBlue]}>
+                  <Ionicons name="navigate" size={20} color="#fff" />
                 </View>
                 <Text style={styles.actionLabel}>Route Plan</Text>
               </TouchableOpacity>
@@ -395,9 +417,10 @@ export default function HomeScreen() {
               <TouchableOpacity
                 style={styles.actionButton}
                 onPress={() => handleQuickAction('batterySwap')}
+                activeOpacity={0.7}
               >
-                <View style={[styles.actionIcon, { backgroundColor: '#4CAF50' }]}>
-                  <Ionicons name="swap-horizontal" size={24} color={COLORS.white} />
+                <View style={[styles.actionIconContainer, styles.actionGreen]}>
+                  <Ionicons name="repeat" size={20} color="#fff" />
                 </View>
                 <Text style={styles.actionLabel}>Battery Swap</Text>
               </TouchableOpacity>
@@ -405,98 +428,142 @@ export default function HomeScreen() {
               <TouchableOpacity
                 style={styles.actionButton}
                 onPress={() => handleQuickAction('emergency')}
+                activeOpacity={0.7}
               >
-                <View style={[styles.actionIcon, { backgroundColor: '#f44336' }]}>
-                  <Ionicons name="warning" size={24} color={COLORS.white} />
+                <View style={[styles.actionIconContainer, styles.actionRed]}>
+                  <Ionicons name="warning" size={20} color="#fff" />
                 </View>
-                <Text style={styles.actionLabel}>SOS</Text>
+                <Text style={styles.actionLabel}>Emergency</Text>
               </TouchableOpacity>
             </View>
           </View>
 
-          {/* Nearest Stations */}
+          {/* Compact Stations List */}
           <View style={styles.nearestStations}>
-            <Text style={styles.sectionTitle}>Nearest Stations</Text>
-            {nearestStations.slice(0, 3).map(station => (
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Nearby Stations</Text>
+              <Text style={styles.sectionSubtitle}>Updated now</Text>
+            </View>
+            {nearestStations.slice(0, 3).map((station) => (
               <TouchableOpacity
                 key={station.id}
-                style={styles.stationCard}
+                style={[
+                  styles.stationCard,
+                  { borderLeftColor: station.status === 'available' ? '#10b981' : '#ef4444' }
+                ]}
                 onPress={() => navigateToStation(station)}
+                activeOpacity={0.7}
               >
                 <View style={styles.stationLeft}>
                   <View style={[
-                    styles.stationStatusDot,
-                    { backgroundColor: station.status === 'available' ? '#4CAF50' : '#f44336' }
-                  ]} />
+                    styles.stationIconContainer,
+                    { backgroundColor: station.status === 'available' ? '#dcfce7' : '#fee2e2' }
+                  ]}>
+                    <Ionicons 
+                      name={getStationIconName(station.type) as keyof typeof Ionicons.glyphMap}
+                      size={20} 
+                      color={station.status === 'available' ? '#10b981' : '#ef4444'} 
+                    />
+                  </View>
                   <View style={styles.stationInfo}>
                     <Text style={styles.stationName}>{station.name}</Text>
-                    <Text style={styles.stationDetails}>
-                      {station.power}kW • {station.type} • {station.distance?.toFixed(1)}km
+                    <Text style={styles.stationMetaText} numberOfLines={1}>
+                      {station.address || 'EV Charging Station'}
                     </Text>
                   </View>
                 </View>
-                <View style={styles.stationRight}>
-                  <Text style={styles.stationStatus}>{station.status}</Text>
-                  <Ionicons name="chevron-forward" size={16} color={COLORS.textSecondary} />
+                
+                <View style={styles.stationMeta}>
+                  <View style={styles.stationMetaItem}>
+                    <Ionicons name="navigate" size={13} color="#64748b" />
+                    <Text style={styles.stationMetaText}>{station.distance?.toFixed(1)} km</Text>
+                  </View>
+                  
+                  <View style={styles.metaDivider} />
+                  
+                  <View style={styles.stationMetaItem}>
+                    <Ionicons name="flash" size={13} color="#64748b" />
+                    <Text style={styles.stationMetaText}>{station.power} kW</Text>
+                  </View>
+                  
+                  <View style={styles.metaDivider} />
+                  
+                  <View style={[
+                    styles.statusBadge,
+                    { backgroundColor: station.status === 'available' ? '#dcfce7' : '#fee2e2' }
+                  ]}>
+                    <View style={[
+                      styles.statusDot,
+                      { backgroundColor: station.status === 'available' ? '#10b981' : '#ef4444' }
+                    ]} />
+                    <Text style={[
+                      styles.statusText,
+                      { color: station.status === 'available' ? '#059669' : '#dc2626' }
+                    ]}>
+                      {station.status}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.stationArrow}>
+                  <Ionicons name="chevron-forward" size={16} color="#94a3b8" />
                 </View>
               </TouchableOpacity>
             ))}
           </View>
 
-          {/* Energy Insights */}
-          <View style={styles.energyInsights}>
-            <Text style={styles.sectionTitle}>Energy Insights</Text>
-            <View style={styles.insightCard}>
-              <View style={styles.insightRow}>
-                <Text style={styles.insightLabel}>Estimated Range</Text>
-                <Text style={styles.insightValue}>{Math.round(currentSoC * 4.2)}km</Text>
-              </View>
-              <View style={styles.insightRow}>
-                <Text style={styles.insightLabel}>Nearest Charger</Text>
-                <Text style={styles.insightValue}>
-                  {nearestStations[0]?.distance?.toFixed(1)}km
-                </Text>
-              </View>
-              <View style={styles.insightRow}>
-                <Text style={styles.insightLabel}>Charging Needed</Text>
-                <Text style={[
-                  styles.insightValue,
-                  { color: currentSoC > 30 ? '#4CAF50' : '#f44336' }
-                ]}>
-                  {currentSoC > 30 ? 'Not Required' : 'Soon'}
-                </Text>
-              </View>
-            </View>
-          </View>
+          <View style={{ height: 16 }} />
         </ScrollView>
       </Animated.View>
 
-      {/* SoC Modal */}
+      {/* Compact SoC Modal */}
       <Modal
         visible={socModalVisible}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setSocModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Update State of Charge</Text>
-              <TouchableOpacity onPress={() => setSocModalVisible(false)}>
-                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+              <View>
+                <Text style={styles.modalTitle}>Update Battery</Text>
+                <Text style={styles.modalSubtitle}>Current: {currentSoC}%</Text>
+              </View>
+              <TouchableOpacity 
+                onPress={() => setSocModalVisible(false)}
+                style={styles.modalClose}
+              >
+                <Ionicons name="close" size={22} color="#64748b" />
               </TouchableOpacity>
             </View>
             
-            <View style={styles.socInputContainer}>
-              <TextInput
-                style={styles.socInput}
-                value={tempSoC}
-                onChangeText={setTempSoC}
-                keyboardType="numeric"
-                placeholder="Enter SoC (0-100)"
-                maxLength={3}
-              />
-              <Text style={styles.socUnit}>%</Text>
+            <View style={styles.socInputWrapper}>
+              <View style={styles.socInputContainer}>
+                <TextInput
+                  style={styles.socInput}
+                  value={tempSoC}
+                  onChangeText={setTempSoC}
+                  keyboardType="numeric"
+                  placeholder="85"
+                  maxLength={3}
+                  placeholderTextColor="#cbd5e1"
+                />
+                <Text style={styles.socUnit}>%</Text>
+              </View>
+              <Text style={styles.socInputHint}>Enter value between 0-100</Text>
+            </View>
+
+            <View style={styles.quickSocButtons}>
+              {[25, 50, 75, 100].map((value) => (
+                <TouchableOpacity
+                  key={value}
+                  style={styles.quickSocButton}
+                  onPress={() => setTempSoC(value.toString())}
+                >
+                  <Text style={styles.quickSocText}>{value}%</Text>
+                </TouchableOpacity>
+              ))}
             </View>
 
             <View style={styles.modalActions}>
@@ -510,6 +577,7 @@ export default function HomeScreen() {
                 style={[styles.modalButton, styles.updateButton]}
                 onPress={updateSoC}
               >
+                <Ionicons name="checkmark" size={18} color="#fff" style={styles.buttonIcon} />
                 <Text style={styles.updateButtonText}>Update</Text>
               </TouchableOpacity>
             </View>
@@ -523,7 +591,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#f8fafc',
   },
   mapContainer: {
     position: 'relative',
@@ -532,192 +600,270 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
   bottomContainer: {
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#f8fafc',
+  },
+  scrollContent: {
+    paddingBottom: 20,
   },
   centered: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-    padding: SPACING.xl,
+    backgroundColor: '#f8fafc',
+    padding: 24,
   },
   loadingText: {
-    marginTop: SPACING.md,
-    fontSize: FONTS.sizes.base,
-    color: COLORS.textSecondary,
+    marginTop: 12,
+    fontSize: 14,
+    color: '#64748b',
     textAlign: 'center',
   },
   
-  // Search Components
+  // Error States
+  errorIconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 8,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#64748b',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 20,
+  },
+  retryButton: {
+    backgroundColor: COLORS.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 10,
+    elevation: 3,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  retryText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  buttonIcon: {
+    marginRight: 6,
+  },
+  
+  // Compact Search
   searchContainer: {
     position: 'absolute',
-    top: 60,
-    left: 20,
-    right: 20,
+    top: 50,
+    left: 12,
+    right: 12,
     zIndex: 1000,
   },
   searchBar: {
-    backgroundColor: 'white',
+    backgroundColor: '#fff',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 12,
-    borderRadius: 25,
-    elevation: 5,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderRadius: 12,
+    elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
   },
   searchInput: {
     flex: 1,
-    marginLeft: SPACING.sm,
-    fontSize: FONTS.sizes.base,
-    color: COLORS.textPrimary,
+    marginLeft: 10,
+    fontSize: 14,
+    color: '#0f172a',
+    fontWeight: '500',
   },
   searchResults: {
-    backgroundColor: 'white',
-    marginTop: 5,
+    backgroundColor: '#fff',
+    marginTop: 6,
     borderRadius: 12,
-    elevation: 5,
+    elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    maxHeight: 200,
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    maxHeight: 220,
+    overflow: 'hidden',
   },
   searchResultItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: SPACING.md,
+    padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: '#f1f5f9',
   },
   searchResultLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
   },
+  searchResultIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   searchResultText: {
-    marginLeft: SPACING.sm,
+    marginLeft: 10,
     flex: 1,
   },
   searchResultName: {
-    fontSize: FONTS.sizes.base,
+    fontSize: 13,
     fontWeight: '600',
-    color: COLORS.textPrimary,
+    color: '#0f172a',
+    marginBottom: 2,
   },
   searchResultAddress: {
-    fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
-    marginTop: 2,
+    fontSize: 11,
+    color: '#64748b',
   },
   noResults: {
-    padding: SPACING.md,
+    padding: 24,
     alignItems: 'center',
   },
   noResultsText: {
-    color: COLORS.textSecondary,
-    fontSize: FONTS.sizes.sm,
+    color: '#64748b',
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 6,
   },
 
-  // SoC Components
+  // Compact SoC
   socContainer: {
     position: 'absolute',
-    top: 130,
-    right: 20,
-    backgroundColor: 'white',
-    padding: 12,
+    top: 120,
+    right: 12,
     borderRadius: 12,
-    elevation: 5,
+    elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    minWidth: 80,
-    alignItems: 'center',
+    shadowRadius: 8,
+    overflow: 'hidden',
   },
-  socHeader: {
+  socCard: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    minWidth: 80,
+    borderLeftWidth: 3,
+  },
+  socTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
-  },
-  socLabel: {
-    fontSize: FONTS.sizes.xs,
-    color: COLORS.textSecondary,
-    marginLeft: 4,
-    fontWeight: '500',
+    gap: 4,
+    marginBottom: 2,
   },
   socValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    lineHeight: 24,
+    fontSize: 18,
+    fontWeight: '800',
+    lineHeight: 18,
   },
-  socStatus: {
-    fontSize: FONTS.sizes.xs,
-    color: COLORS.textSecondary,
-    marginTop: 2,
+  socRange: {
+    fontSize: 10,
+    color: '#64748b',
+    fontWeight: '600',
   },
 
   // Map Toggle
   mapToggle: {
     position: 'absolute',
     bottom: 20,
-    right: 20,
+    right: 12,
     backgroundColor: COLORS.primary,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 5,
-    shadowColor: '#000',
+    elevation: 4,
+    shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
   },
 
-  // Header
+  // Compact Header
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: SPACING.lg,
-    backgroundColor: 'white',
-    marginHorizontal: SPACING.md,
-    marginTop: SPACING.md,
-    borderRadius: 12,
+    padding: 14,
+    backgroundColor: '#fff',
+    marginHorizontal: 12,
+    marginTop: 12,
+    marginBottom: 4,
+    borderRadius: 14,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowRadius: 4,
+  },
+  headerLeft: {
+    flex: 1,
   },
   welcomeText: {
-    fontSize: FONTS.sizes.xl,
-    fontWeight: 'bold',
-    color: COLORS.textPrimary,
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 3,
+  },
+  carInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   carText: {
-    fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
-    marginTop: 2,
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '500',
   },
   profileButton: {
-    padding: 4,
+    padding: 2,
+  },
+  profileAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
   },
 
-  // Quick Actions
+  // Compact Quick Actions
   quickActions: {
-    padding: SPACING.lg,
-    paddingTop: SPACING.md,
+    paddingHorizontal: 12,
+    paddingTop: 12,
   },
   sectionTitle: {
-    fontSize: FONTS.sizes.lg,
-    fontWeight: 'bold',
-    color: COLORS.textPrimary,
-    marginBottom: SPACING.md,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 10,
   },
   actionGrid: {
     flexDirection: 'row',
@@ -725,231 +871,298 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   actionButton: {
-    width: '48%',
+    width: '48.5%',
     alignItems: 'center',
-    padding: SPACING.md,
-    backgroundColor: 'white',
-    borderRadius: 12,
-    marginBottom: SPACING.sm,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    marginBottom: 8,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowRadius: 4,
   },
-  actionIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  actionIconContainer: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: SPACING.sm,
+    marginBottom: 8,
+  },
+  actionPrimary: {
+    backgroundColor: COLORS.primary,
+  },
+  actionBlue: {
+    backgroundColor: '#3b82f6',
+  },
+  actionGreen: {
+    backgroundColor: '#10b981',
+  },
+  actionRed: {
+    backgroundColor: '#ef4444',
   },
   actionLabel: {
-    fontSize: FONTS.sizes.sm,
-    fontWeight: '500',
-    color: COLORS.textPrimary,
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#0f172a',
     textAlign: 'center',
   },
 
-  // Nearest Stations
+  // Compact Stations
   nearestStations: {
-    paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.md,
+    paddingHorizontal: 12,
+    paddingTop: 12,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  sectionSubtitle: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '500',
   },
   stationCard: {
-    backgroundColor: 'white',
-    padding: SPACING.md,
-    borderRadius: 12,
-    marginBottom: SPACING.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    padding: 14,
+    borderRadius: 16,
+    marginBottom: 10,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowRadius: 4,
+    borderLeftWidth: 4,
+    borderLeftColor: '#10b981',
   },
   stationLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    marginBottom: 10,
   },
-  stationStatusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: SPACING.sm,
+  stationIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
   stationInfo: {
     flex: 1,
   },
   stationName: {
-    fontSize: FONTS.sizes.base,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 5,
   },
-  stationDetails: {
-    fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-  },
-  stationRight: {
+  stationMeta: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
   },
-  stationStatus: {
-    fontSize: FONTS.sizes.xs,
-    color: COLORS.textSecondary,
-    marginRight: SPACING.xs,
+  stationMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#f8fafc',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  stationMetaText: {
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '600',
+  },
+  stationMetaIcon: {
+    marginRight: 4,
+  },
+  metaDivider: {
+    width: 1,
+    height: 16,
+    backgroundColor: '#e2e8f0',
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  statusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '700',
     textTransform: 'capitalize',
   },
-
-  // Energy Insights
-  energyInsights: {
-    paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.xl,
-  },
-  insightCard: {
-    backgroundColor: 'white',
-    padding: SPACING.lg,
-    borderRadius: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-  },
-  insightRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  stationArrow: {
+    position: 'absolute',
+    right: 14,
+    top: 14,
+    backgroundColor: '#f8fafc',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: SPACING.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  insightLabel: {
-    fontSize: FONTS.sizes.base,
-    color: COLORS.textPrimary,
-    fontWeight: '500',
-  },
-  insightValue: {
-    fontSize: FONTS.sizes.base,
-    fontWeight: 'bold',
-    color: COLORS.primary,
   },
 
   // Marker Styles
   markerContainer: {
-    padding: 6,
+    padding: 7,
     borderRadius: 16,
-    borderWidth: 2,
-    borderColor: COLORS.white,
-    elevation: 3,
+    borderWidth: 2.5,
+    borderColor: '#fff',
+    elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
-    shadowRadius: 2,
+    shadowRadius: 3,
   },
 
-  // Error States
-  errorText: {
-    fontSize: FONTS.sizes.base,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    marginBottom: SPACING.md,
-    lineHeight: 22,
-  },
-  retryButton: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: SPACING.xl,
-    paddingVertical: SPACING.md,
-    borderRadius: 25,
-    elevation: 2,
-  },
-  retryText: {
-    color: COLORS.white,
-    fontSize: FONTS.sizes.base,
-    fontWeight: 'bold',
-  },
-
-  // Modal Styles
+  // Compact Modal
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: SPACING.lg,
+    padding: 16,
   },
   modalContent: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: SPACING.xl,
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 20,
     width: '100%',
-    maxWidth: 300,
-    elevation: 10,
+    maxWidth: 320,
+    elevation: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: SPACING.lg,
+    alignItems: 'flex-start',
+    marginBottom: 20,
   },
   modalTitle: {
-    fontSize: FONTS.sizes.lg,
-    fontWeight: 'bold',
-    color: COLORS.textPrimary,
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 3,
+  },
+  modalSubtitle: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  modalClose: {
+    padding: 2,
+  },
+  socInputWrapper: {
+    marginBottom: 16,
   },
   socInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 2,
     borderColor: COLORS.primary,
-    borderRadius: 12,
-    paddingHorizontal: SPACING.md,
-    marginBottom: SPACING.lg,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#f8fafc',
   },
   socInput: {
-    flex: 1,
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: COLORS.textPrimary,
-    paddingVertical: SPACING.md,
+    fontSize: 38,
+    fontWeight: '800',
+    color: COLORS.primary,
     textAlign: 'center',
+    minWidth: 100,
   },
   socUnit: {
-    fontSize: FONTS.sizes.lg,
-    fontWeight: 'bold',
-    color: COLORS.textSecondary,
-    marginLeft: SPACING.sm,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#94a3b8',
+    marginLeft: 6,
+  },
+  socInputHint: {
+    fontSize: 11,
+    color: '#94a3b8',
+    textAlign: 'center',
+    marginTop: 6,
+    fontWeight: '500',
+  },
+  quickSocButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    gap: 6,
+  },
+  quickSocButton: {
+    flex: 1,
+    paddingVertical: 10,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 10,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+  },
+  quickSocText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
   },
   modalActions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: SPACING.md,
+    gap: 10,
   },
   modalButton: {
     flex: 1,
-    paddingVertical: SPACING.md,
-    borderRadius: 8,
+    paddingVertical: 13,
+    borderRadius: 12,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
   },
   cancelButton: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
   },
   cancelButtonText: {
-    color: COLORS.textSecondary,
-    fontSize: FONTS.sizes.base,
+    color: '#64748b',
+    fontSize: 14,
     fontWeight: '600',
   },
   updateButton: {
     backgroundColor: COLORS.primary,
+    elevation: 3,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
   },
   updateButtonText: {
-    color: COLORS.white,
-    fontSize: FONTS.sizes.base,
+    color: '#fff',
+    fontSize: 14,
     fontWeight: '600',
   },
 });
-
