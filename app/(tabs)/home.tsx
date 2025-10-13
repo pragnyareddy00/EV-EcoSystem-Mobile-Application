@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
+import { collection, getDocs } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -17,8 +18,9 @@ import {
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import { COLORS } from '../../constants/colors';
-import { mockStations, Station } from '../../constants/stations';
+import { Station } from '../../constants/stations';
 import { useAuth } from '../../context/AuthContext';
+import { db } from '../../services/firebase';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -26,17 +28,19 @@ export default function HomeScreen() {
   const mapRef = useRef<MapView>(null);
   
   const [region, setRegion] = useState<Region | null>(null);
+  const [stations, setStations] = useState<Station[]>([]);
   const [visibleStations, setVisibleStations] = useState<Station[]>([]);
   const [filteredStations, setFilteredStations] = useState<Station[]>([]);
   const [permissionError, setPermissionError] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
-  const [mapHeight] = useState(new Animated.Value(0.60)); // 60% initially
+  const [mapHeight] = useState(new Animated.Value(0.60));
   const [isMapExpanded, setIsMapExpanded] = useState(true);
   const [socModalVisible, setSocModalVisible] = useState(false);
   const [currentSoC, setCurrentSoC] = useState(85);
   const [tempSoC, setTempSoC] = useState('85');
   const [nearestStations, setNearestStations] = useState<Station[]>([]);
+  const [isAnimating, setIsAnimating] = useState(false);
 
   useEffect(() => {
     if (!isLoading && userProfile && !userProfile.vehicle) {
@@ -60,15 +64,107 @@ export default function HomeScreen() {
       longitudeDelta: 0.0421,
     };
     setRegion(initialRegion);
-    updateVisibleStations(initialRegion);
-    findNearestStations(currentLocation.coords);
+  };
+
+  const loadStations = async () => {
+    try {
+      const stationsSnapshot = await getDocs(collection(db, 'stations'));
+      const stationsData = stationsSnapshot.docs
+        .map(doc => {
+          try {
+            const data = doc.data();
+            const id = doc.id;
+            
+            // Validate required fields exist
+            if (!data || typeof data !== 'object') {
+              return null;
+            }
+
+            // Use the exact field names from your Firestore
+            const rawLat = data.latitude;
+            const rawLon = data.longitude;
+            const rawName = data.name;
+            const rawAddress = data.address;
+            const rawPower = data.power;
+            const rawStatus = data.status;
+            const rawType = data.type;
+            const rawServices = data.services;
+            const rawIsAvailable = data.isAvailable;
+            const rawConnectorType = data.connectorType;
+            
+            // Check if coordinates exist
+            if (rawLat === undefined || rawLon === undefined || rawLat === null || rawLon === null) {
+              return null;
+            }
+
+            // Parse coordinates
+            const lat = typeof rawLat === 'string' ? parseFloat(rawLat) : Number(rawLat);
+            const lon = typeof rawLon === 'string' ? parseFloat(rawLon) : Number(rawLon);
+
+            // Validate coordinates are numbers and within range
+            if (isNaN(lat) || isNaN(lon)) {
+              return null;
+            }
+
+            if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+              return null;
+            }
+
+            // Use isAvailable field to determine status if status field is not available
+            const status = rawStatus || (rawIsAvailable ? 'available' : 'unavailable') || 'unknown';
+            
+            // Use connectorType if type is not available
+            const type = rawType || rawConnectorType || 'standard';
+
+            return {
+              id: id,
+              name: rawName || 'Unknown Station',
+              address: rawAddress || 'No address provided',
+              latitude: lat,
+              longitude: lon,
+              power: parseInt(rawPower, 10) || 0,
+              status: status,
+              type: type,
+              services: Array.isArray(rawServices) ? rawServices : [],
+              isAvailable: rawIsAvailable || false,
+              connectorType: rawConnectorType || 'Unknown'
+            } as Station;
+
+          } catch (error) {
+            return null;
+          }
+        })
+        .filter((station): station is Station => station !== null);
+
+      console.log(`✅ Loaded ${stationsData.length} valid stations`);
+
+      setStations(stationsData);
+    } catch (error) {
+      console.error('❌ Error loading stations:', error);
+      Alert.alert('Error', 'Failed to load stations. Please try again.');
+      setStations([]);
+    }
   };
 
   useEffect(() => {
     requestLocation();
+    loadStations();
   }, []);
 
+  useEffect(() => {
+    if (region && stations.length > 0) {
+      findNearestStations({
+        latitude: region.latitude,
+        longitude: region.longitude,
+      });
+      updateVisibleStations(region);
+    }
+  }, [region, stations]);
+
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    if (typeof lat1 !== 'number' || typeof lon1 !== 'number' || typeof lat2 !== 'number' || typeof lon2 !== 'number') {
+      return Infinity;
+    }
     const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
@@ -81,7 +177,7 @@ export default function HomeScreen() {
   };
 
   const findNearestStations = (coords: { latitude: number, longitude: number }) => {
-    const stationsWithDistance = mockStations.map(station => ({
+    const stationsWithDistance = stations.map(station => ({
       ...station,
       distance: calculateDistance(coords.latitude, coords.longitude, station.latitude, station.longitude)
     }));
@@ -95,7 +191,7 @@ export default function HomeScreen() {
 
   const updateVisibleStations = (currentRegion: Region) => {
     if (!currentRegion) return;
-    const visible = mockStations.filter(station =>
+    const visible = stations.filter(station =>
       station.latitude > currentRegion.latitude - currentRegion.latitudeDelta / 2 &&
       station.latitude < currentRegion.latitude + currentRegion.latitudeDelta / 2 &&
       station.longitude > currentRegion.longitude - currentRegion.longitudeDelta / 2 &&
@@ -113,25 +209,77 @@ export default function HomeScreen() {
     }
 
     setIsSearching(true);
-    const filtered = mockStations.filter(station =>
-      station.name.toLowerCase().includes(query.toLowerCase()) ||
-      station.address?.toLowerCase().includes(query.toLowerCase())
+    const filtered = stations.filter(station =>
+      (station.name || '').toLowerCase().includes(query.toLowerCase()) ||
+      (station.address || '').toLowerCase().includes(query.toLowerCase())
     );
     setFilteredStations(filtered);
   };
 
   const navigateToStation = (station: Station) => {
-    if (mapRef.current) {
+    // Prevent rapid successive calls
+    if (isAnimating) {
+      console.warn('Animation already in progress, ignoring rapid call');
+      return;
+    }
+    
+    if (!mapRef.current) {
+      console.warn('Map reference is not available');
+      return;
+    }
+    
+    // Comprehensive coordinate validation
+    if (typeof station.latitude !== 'number' || typeof station.longitude !== 'number') {
+      console.error('Station coordinates are not numbers:', station);
+      Alert.alert('Error', 'Invalid station location data');
+      return;
+    }
+    
+    if (isNaN(station.latitude) || isNaN(station.longitude)) {
+      console.error('Station coordinates are NaN:', station);
+      Alert.alert('Error', 'Invalid station coordinates');
+      return;
+    }
+    
+    if (station.latitude < -90 || station.latitude > 90 || 
+        station.longitude < -180 || station.longitude > 180) {
+      console.error('Station coordinates out of bounds:', station);
+      Alert.alert('Error', 'Station coordinates are out of valid range');
+      return;
+    }
+
+    try {
+      setIsAnimating(true);
+      
       const newRegion = {
         latitude: station.latitude,
         longitude: station.longitude,
         latitudeDelta: 0.01,
         longitudeDelta: 0.01,
       };
+
+      console.log('📍 Navigating to station:', {
+        name: station.name,
+        coordinates: { lat: station.latitude, lng: station.longitude },
+        region: newRegion
+      });
+
       mapRef.current.animateToRegion(newRegion, 1000);
+      
+      // Clear search state
       setSearchQuery('');
       setFilteredStations([]);
       setIsSearching(false);
+      
+      // Reset animation flag after animation duration
+      setTimeout(() => {
+        setIsAnimating(false);
+      }, 1000);
+      
+    } catch (error) {
+      console.error('❌ Error animating to station region:', error);
+      Alert.alert('Error', 'Failed to navigate to station on map');
+      setIsAnimating(false);
     }
   };
 
@@ -173,7 +321,7 @@ export default function HomeScreen() {
         );
         break;
       case 'batterySwap':
-        const swapStations = mockStations.filter(station => station.type === 'swap' || station.services?.includes('battery_swap'));
+        const swapStations = stations.filter(station => station.type === 'swap' || station.services?.includes('battery_swap'));
         if (swapStations.length > 0) {
           navigateToStation(swapStations[0]);
         } else {
@@ -201,7 +349,7 @@ export default function HomeScreen() {
     return 'Critical';
   };
 
-  const getStationIconName = (type: string) => {
+  const getStationIconName = (type: string | undefined) => {
     if (type === 'fast') return 'flash';
     if (type === 'swap') return 'repeat';
     return 'battery-charging';
@@ -254,33 +402,50 @@ export default function HomeScreen() {
           showsUserLocation
           showsMyLocationButton={false}
         >
-          {visibleStations.map(station => (
-            <Marker
-              key={station.id}
-              coordinate={{ latitude: station.latitude, longitude: station.longitude }}
-              title={station.name}
-              description={`${station.type} • ${station.power}kW`}
-              identifier={station.id.toString()}
-              onPress={() => {
-                Alert.alert(
-                  station.name,
-                  `Type: ${station.type}\nPower: ${station.power}kW\nStatus: ${station.status}`,
-                  [{ text: 'Cancel', style: 'cancel' }, { text: 'Navigate', onPress: () => navigateToStation(station) }]
-                );
-              }}
-            >
-              <View style={[
-                styles.markerContainer,
-                { backgroundColor: station.status === 'available' ? '#10b981' : '#ef4444' }
-              ]}>
-                <Ionicons
-                  name={getStationIconName(station.type) as keyof typeof Ionicons.glyphMap}
-                  size={16}
-                  color="#ffffff"
-                />
-              </View>
-            </Marker>
-          ))}
+          {visibleStations.map(station => {
+            // Double-check coordinates before rendering marker
+            if (typeof station.latitude !== 'number' || typeof station.longitude !== 'number' ||
+                isNaN(station.latitude) || isNaN(station.longitude)) {
+              console.warn('❌ Skipping invalid station marker:', station);
+              return null;
+            }
+
+            return (
+              <Marker
+                key={station.id}
+                coordinate={{
+                  latitude: station.latitude,
+                  longitude: station.longitude
+                }}
+                title={station.name}
+                description={`${station.type} • ${station.power}kW`}
+                onPress={() => {
+                  Alert.alert(
+                    station.name,
+                    `Type: ${station.type}\nPower: ${station.power}kW\nStatus: ${station.status}\nAddress: ${station.address}`,
+                    [
+                      { text: 'Cancel', style: 'cancel' }, 
+                      { 
+                        text: 'Navigate', 
+                        onPress: () => navigateToStation(station) 
+                      }
+                    ]
+                  );
+                }}
+              >
+                <View style={[
+                  styles.markerContainer,
+                  { backgroundColor: station.status === 'available' ? '#10b981' : '#ef4444' }
+                ]}>
+                  <Ionicons
+                    name={getStationIconName(station.type) as keyof typeof Ionicons.glyphMap}
+                    size={16}
+                    color="#ffffff"
+                  />
+                </View>
+              </Marker>
+            );
+          })}
         </MapView>
 
         {/* Compact Search Bar */}
@@ -323,7 +488,7 @@ export default function HomeScreen() {
                     </View>
                     <Ionicons name="arrow-forward" size={16} color="#64748b" />
                   </TouchableOpacity>
-                ))
+                 ))
                ) : (
                 <View style={styles.noResults}>
                   <Ionicons name="search-outline" size={28} color="#cbd5e1" />
@@ -444,72 +609,78 @@ export default function HomeScreen() {
               <Text style={styles.sectionTitle}>Nearby Stations</Text>
               <Text style={styles.sectionSubtitle}>Updated now</Text>
             </View>
-            {nearestStations.slice(0, 3).map((station) => (
-              <TouchableOpacity
-                key={station.id}
-                style={[
-                  styles.stationCard,
-                  { borderLeftColor: station.status === 'available' ? '#10b981' : '#ef4444' }
-                ]}
-                onPress={() => navigateToStation(station)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.stationLeft}>
-                  <View style={[
-                    styles.stationIconContainer,
-                    { backgroundColor: station.status === 'available' ? '#dcfce7' : '#fee2e2' }
-                  ]}>
-                    <Ionicons 
-                      name={getStationIconName(station.type) as keyof typeof Ionicons.glyphMap}
-                      size={20} 
-                      color={station.status === 'available' ? '#10b981' : '#ef4444'} 
-                    />
-                  </View>
-                  <View style={styles.stationInfo}>
-                    <Text style={styles.stationName}>{station.name}</Text>
-                    <Text style={styles.stationMetaText} numberOfLines={1}>
-                      {station.address || 'EV Charging Station'}
-                    </Text>
-                  </View>
-                </View>
-                
-                <View style={styles.stationMeta}>
-                  <View style={styles.stationMetaItem}>
-                    <Ionicons name="navigate" size={13} color="#64748b" />
-                    <Text style={styles.stationMetaText}>{station.distance?.toFixed(1)} km</Text>
-                  </View>
-                  
-                  <View style={styles.metaDivider} />
-                  
-                  <View style={styles.stationMetaItem}>
-                    <Ionicons name="flash" size={13} color="#64748b" />
-                    <Text style={styles.stationMetaText}>{station.power} kW</Text>
-                  </View>
-                  
-                  <View style={styles.metaDivider} />
-                  
-                  <View style={[
-                    styles.statusBadge,
-                    { backgroundColor: station.status === 'available' ? '#dcfce7' : '#fee2e2' }
-                  ]}>
-                    <View style={[
-                      styles.statusDot,
-                      { backgroundColor: station.status === 'available' ? '#10b981' : '#ef4444' }
-                    ]} />
-                    <Text style={[
-                      styles.statusText,
-                      { color: station.status === 'available' ? '#059669' : '#dc2626' }
-                    ]}>
-                      {station.status}
-                    </Text>
-                  </View>
-                </View>
+            {stations.length === 0 ? (
+                <ActivityIndicator color={COLORS.primary} style={{ marginVertical: 20 }}/>
+            ) : nearestStations.length > 0 ? (
+                nearestStations.slice(0, 3).map((station) => (
+                  <TouchableOpacity
+                    key={station.id}
+                    style={[
+                      styles.stationCard,
+                      { borderLeftColor: station.status === 'available' ? '#10b981' : '#ef4444' }
+                    ]}
+                    onPress={() => navigateToStation(station)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.stationLeft}>
+                      <View style={[
+                        styles.stationIconContainer,
+                        { backgroundColor: station.status === 'available' ? '#dcfce7' : '#fee2e2' }
+                      ]}>
+                        <Ionicons 
+                          name={getStationIconName(station.type) as keyof typeof Ionicons.glyphMap}
+                          size={20} 
+                          color={station.status === 'available' ? '#10b981' : '#ef4444'} 
+                        />
+                      </View>
+                      <View style={styles.stationInfo}>
+                        <Text style={styles.stationName}>{station.name}</Text>
+                        <Text style={styles.stationMetaText} numberOfLines={1}>
+                          {station.address}
+                        </Text>
+                      </View>
+                    </View>
+                    
+                    <View style={styles.stationMeta}>
+                      <View style={styles.stationMetaItem}>
+                        <Ionicons name="navigate" size={13} color="#64748b" />
+                        <Text style={styles.stationMetaText}>{station.distance?.toFixed(1)} km</Text>
+                      </View>
+                      
+                      <View style={styles.metaDivider} />
+                      
+                      <View style={styles.stationMetaItem}>
+                        <Ionicons name="flash" size={13} color="#64748b" />
+                        <Text style={styles.stationMetaText}>{station.power} kW</Text>
+                      </View>
+                      
+                      <View style={styles.metaDivider} />
+                      
+                      <View style={[
+                        styles.statusBadge,
+                        { backgroundColor: station.status === 'available' ? '#dcfce7' : '#fee2e2' }
+                      ]}>
+                        <View style={[
+                          styles.statusDot,
+                          { backgroundColor: station.status === 'available' ? '#10b981' : '#ef4444' }
+                        ]} />
+                        <Text style={[
+                          styles.statusText,
+                          { color: station.status === 'available' ? '#059669' : '#dc2626' }
+                        ]}>
+                          {station.status}
+                        </Text>
+                      </View>
+                    </View>
 
-                <View style={styles.stationArrow}>
-                  <Ionicons name="chevron-forward" size={16} color="#94a3b8" />
-                </View>
-              </TouchableOpacity>
-            ))}
+                    <View style={styles.stationArrow}>
+                      <Ionicons name="chevron-forward" size={16} color="#94a3b8" />
+                    </View>
+                  </TouchableOpacity>
+                ))
+            ) : (
+                <Text style={styles.noNearbyText}>No stations found nearby.</Text>
+            )}
           </View>
 
           <View style={{ height: 16 }} />
@@ -1164,5 +1335,13 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
+  },
+  noNearbyText: {
+    textAlign: 'center',
+    color: '#64748b',
+    marginTop: 20,
+    marginBottom: 20,
+    fontSize: 14,
+    fontWeight: '500'
   },
 });

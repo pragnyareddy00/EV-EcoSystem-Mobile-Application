@@ -1,11 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { addDoc, collection } from 'firebase/firestore';
 import React, { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../../constants/colors';
 import { useAuth } from '../../context/AuthContext';
+import { db } from '../../services/firebase';
 
-import { Station, mockStations } from '../../constants/stations';
 
 interface StationForm {
   name: string;
@@ -61,24 +62,26 @@ export default function AddStationScreen() {
         return;
       }
 
-      // Create new station object
-      const newStation: Station = {
-        id: Date.now().toString(), // Generate a unique ID
+      // Prepare station data
+      const newStation = {
         name: form.name,
         address: form.address,
         latitude,
         longitude,
-
-        connectorType: form.connectorType as 'CCS-2' | 'CHAdeMO' | 'Type 2 AC' | 'Unknown',
-        type: form.type as 'fast' | 'slow' | 'swap',
+        connectorType: form.connectorType || 'Unknown',
         power,
-        status: form.status as 'available' | 'occupied' | 'maintenance',
-        isAvailable: form.status === 'available',
+        type: form.type,
+        status: 'available',
+        isAvailable: true,
+        city: form.city,
+        state: form.state,
         services: [],
+        createdAt: new Date().toISOString(),
       };
 
-      // Add to stations list
-      mockStations.push(newStation);
+      // Add station to Firestore
+      const stationsCollectionRef = collection(db, 'stations');
+      await addDoc(stationsCollectionRef, newStation);
 
       Alert.alert('Success', 'Station added successfully', [
         { text: 'OK', onPress: () => router.back() }
