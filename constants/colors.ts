@@ -1,121 +1,124 @@
 // constants/colors.ts
 export const COLORS = {
-  // Primary brand colors for EVOS - Electric Vehicle Theme
-  primary: '#00D4AA',        // Signature electric teal
-  primary50: '#ECFDF6',      // Ultra light primary
-  primary100: '#D1FAE5',     // Very light primary
-  primary200: '#A7F3D0',     // Light primary
-  primary300: '#6EE7B7',     // Medium light primary
-  primary400: '#34D399',     // Medium primary
-  primary500: '#00D4AA',     // Base primary
-  primary600: '#00B896',     // Dark primary
-  primary700: '#009B82',     // Darker primary
-  primary800: '#007E6E',     // Very dark primary
-  primary900: '#005A5A',     // Darkest primary
+  // Primary brand colors - Updated theme
+  primary: '#2E86AB',        // Electric blue as primary
+  primary50: '#E8F4F8',      // Ultra light primary
+  primary100: '#C5E3F0',     // Very light primary
+  primary200: '#9DD0E7',     // Light primary
+  primary300: '#6ABADD',     // Medium light primary
+  primary400: '#4CA3CD',     // Medium primary
+  primary500: '#2E86AB',     // Base primary (electric)
+  primary600: '#267199',     // Dark primary
+  primary700: '#1E5C87',     // Darker primary
+  primary800: '#164775',     // Very dark primary
+  primary900: '#0E3263',     // Darkest primary
   
-  // Secondary brand colors
-  secondary: '#1A202C',      // Dark charcoal for text
-  secondaryLight: '#2D3748', // Lighter charcoal
-  secondaryDark: '#0F1419',  // Darker charcoal
+  // Secondary brand colors - Forest green
+  secondary: '#1B4332',      // Forest green
+  secondaryLight: '#2D5F4A', // Lighter forest
+  secondaryDark: '#0F2519',  // Darker forest
   
   // Accent colors for different UI elements
-  accent: '#3B82F6',         // Primary blue accent
-  accentTeal: '#06B6D4',     // Teal accent for charging indicators
-  accentPurple: '#8B5CF6',   // Purple accent for premium features
-  accentOrange: '#F97316',   // Orange accent for warnings/energy
+  accent: '#F77F00',         // Orange accent
+  accentSuccess: '#28A745',  // Green success
+  accentWarning: '#FFC107',  // Yellow warning
+  accentDanger: '#DC3545',   // Red danger
+  accentElectric: '#2E86AB', // Electric blue
   
   // Background colors - Light theme
   background: '#FFFFFF',      // Pure white
-  backgroundSoft: '#FAFBFC',  // Softer white
-  backgroundLight: '#F8FAFC', // Very light gray
-  backgroundMuted: '#F1F5F9', // Muted background
+  backgroundSoft: '#F8F9FA',  // Softer white/secondary
+  backgroundLight: '#F8F9FA', // Very light gray
+  backgroundMuted: '#E9ECEF', // Muted background (light gray)
   backgroundCard: '#FFFFFF',  // Card backgrounds
-  backgroundOverlay: '#F8FAFC', // Overlay backgrounds
+  backgroundOverlay: '#F8F9FA', // Overlay backgrounds
   
   // Background colors - Dark theme support
-  backgroundDark: '#0F172A',     // Main dark background
-  backgroundDarkCard: '#1E293B', // Dark card background
-  backgroundDarkSoft: '#334155', // Soft dark background
-  backgroundDarkMuted: '#475569', // Muted dark background
+  backgroundDark: '#0F2519',     // Main dark background (dark forest)
+  backgroundDarkCard: '#1B4332', // Dark card background (forest)
+  backgroundDarkSoft: '#2D5F4A', // Soft dark background
+  backgroundDarkMuted: '#6C757D', // Muted dark background (gray)
   
   // Text colors - Hierarchical system
-  textPrimary: '#0F172A',       // Primary text (headlines)
-  textSecondary: '#334155',     // Secondary text (body)
-  textTertiary: '#64748B',      // Tertiary text (captions)
-  textMuted: '#94A3B8',         // Muted text (placeholders)
-  textDisabled: '#CBD5E1',      // Disabled text
+  textPrimary: '#212529',       // Primary text (headlines)
+  textSecondary: '#6C757D',     // Secondary text (body/gray)
+  textTertiary: '#ADB5BD',      // Tertiary text (light gray)
+  textMuted: '#ADB5BD',         // Muted text (placeholders)
+  textDisabled: '#DEE2E6',      // Disabled text
   textWhite: '#FFFFFF',         // White text
-  textInverse: '#F8FAFC',       // Inverse text for dark backgrounds
+  textInverse: '#F8F9FA',       // Inverse text for dark backgrounds
   
   // Interactive colors
-  interactive: '#00D4AA',       // Interactive elements
-  interactiveHover: '#00B896',  // Hover states
-  interactivePressed: '#009B82', // Pressed states
-  interactiveDisabled: '#E2E8F0', // Disabled interactive elements
+  interactive: '#2E86AB',       // Interactive elements (electric blue)
+  interactiveHover: '#267199',  // Hover states
+  interactivePressed: '#1E5C87', // Pressed states
+  interactiveDisabled: '#E9ECEF', // Disabled interactive elements
   
   // Border colors
-  border: '#E2E8F0',           // Default borders
-  borderLight: '#F1F5F9',      // Light borders
-  borderMedium: '#CBD5E1',     // Medium borders
-  borderStrong: '#94A3B8',     // Strong borders
-  borderFocus: '#00D4AA',      // Focused borders
-  borderError: '#F87171',      // Error borders
-  borderSuccess: '#4ADE80',    // Success borders
-  borderWarning: '#FBBF24',    // Warning borders
+  border: '#E9ECEF',           // Default borders (light)
+  borderLight: '#E9ECEF',      // Light borders
+  borderMedium: '#DEE2E6',     // Medium borders
+  borderStrong: '#6C757D',     // Strong borders
+  borderFocus: '#2E86AB',      // Focused borders (electric blue)
+  borderError: '#DC3545',      // Error borders (danger)
+  borderSuccess: '#28A745',    // Success borders
+  borderWarning: '#FFC107',    // Warning borders
   
   // Status colors - EV specific
-  statusAvailable: '#10B981',   // Charging station available
-  statusBusy: '#F59E0B',        // Charging station busy
-  statusOffline: '#EF4444',     // Charging station offline
-  statusCharging: '#3B82F6',    // Currently charging
-  statusLowBattery: '#F97316',  // Low battery warning
-  statusFullBattery: '#10B981', // Full battery
-  statusMaintenance: '#8B5CF6', // Under maintenance
+  statusAvailable: '#28A745',   // Charging station available (success)
+  statusBusy: '#FFC107',        // Charging station busy (warning)
+  statusOffline: '#DC3545',     // Charging station offline (danger)
+  statusCharging: '#2E86AB',    // Currently charging (electric)
+  statusLowBattery: '#F77F00',  // Low battery warning (orange)
+  statusFullBattery: '#28A745', // Full battery (success)
+  statusMaintenance: '#6C757D', // Under maintenance (gray)
   
   // Semantic colors
-  success: '#10B981',          // Success states
-  successLight: '#D1FAE5',     // Light success background
-  successDark: '#065F46',      // Dark success text
+  success: '#28A745',          // Success states
+  successLight: '#D4EDDA',     // Light success background
+  successDark: '#155724',      // Dark success text
   
-  warning: '#F59E0B',          // Warning states
-  warningLight: '#FEF3C7',     // Light warning background
-  warningDark: '#92400E',      // Dark warning text
+  warning: '#FFC107',          // Warning states
+  warningLight: '#FFF3CD',     // Light warning background
+  warningDark: '#856404',      // Dark warning text
   
-  error: '#EF4444',            // Error states
-  errorLight: '#FEE2E2',       // Light error background
-  errorDark: '#991B1B',        // Dark error text
+  error: '#DC3545',            // Error states
+  errorLight: '#F8D7DA',       // Light error background
+  errorDark: '#721C24',        // Dark error text
   
-  info: '#3B82F6',             // Info states
-  infoLight: '#DBEAFE',        // Light info background
-  infoDark: '#1E3A8A',         // Dark info text
+  info: '#2E86AB',             // Info states (electric blue)
+  infoLight: '#D1ECF1',        // Light info background
+  infoDark: '#164775',         // Dark info text
   
   // Utility colors
   white: '#FFFFFF',
   black: '#000000',
   transparent: 'transparent',
+  gray: '#6C757D',             // Standard gray
+  lightGray: '#E9ECEF',        // Light gray
   
   // Gradient colors for modern effects
-  gradientPrimary: ['#00D4AA', '#06B6D4'], // Primary gradient
-  gradientSecondary: ['#3B82F6', '#8B5CF6'], // Secondary gradient
-  gradientSuccess: ['#10B981', '#34D399'], // Success gradient
-  gradientWarning: ['#F59E0B', '#FBBF24'], // Warning gradient
+  gradientPrimary: ['#2E86AB', '#1B4332'], // Electric to forest
+  gradientSecondary: ['#1B4332', '#2D5F4A'], // Forest gradient
+  gradientSuccess: ['#28A745', '#20C997'], // Success gradient
+  gradientWarning: ['#F77F00', '#FFC107'], // Orange to yellow
   
   // Shadow and overlay colors
-  shadow: 'rgba(15, 23, 42, 0.08)',      // Light shadow
-  shadowMedium: 'rgba(15, 23, 42, 0.12)', // Medium shadow
-  shadowStrong: 'rgba(15, 23, 42, 0.16)', // Strong shadow
-  shadowPrimary: 'rgba(0, 212, 170, 0.15)', // Primary colored shadow
+  shadow: 'rgba(33, 37, 41, 0.1)',      // Light shadow
+  shadowMedium: 'rgba(33, 37, 41, 0.12)', // Medium shadow
+  shadowStrong: 'rgba(33, 37, 41, 0.15)', // Strong shadow
+  shadowPrimary: 'rgba(46, 134, 171, 0.15)', // Primary colored shadow
   
-  overlay: 'rgba(15, 23, 42, 0.6)',      // Dark overlay
-  overlayLight: 'rgba(248, 250, 252, 0.8)', // Light overlay
+  overlay: 'rgba(27, 67, 50, 0.6)',      // Dark overlay (forest)
+  overlayLight: 'rgba(248, 249, 250, 0.8)', // Light overlay
   overlayBlur: 'rgba(255, 255, 255, 0.75)', // Blur overlay
   
   // Surface colors for depth
   surface0: '#FFFFFF',         // Lowest surface
-  surface1: '#F8FAFC',         // Level 1 surface
-  surface2: '#F1F5F9',         // Level 2 surface  
-  surface3: '#E2E8F0',         // Level 3 surface
-  surface4: '#CBD5E1',         // Highest surface
+  surface1: '#F8F9FA',         // Level 1 surface
+  surface2: '#E9ECEF',         // Level 2 surface  
+  surface3: '#DEE2E6',         // Level 3 surface
+  surface4: '#ADB5BD',         // Highest surface
 };
 
 export const FONTS = {
@@ -240,20 +243,54 @@ export const BREAKPOINTS = {
   xl: 1280,  // Desktop
 };
 
+// Shadow configurations
+export const SHADOWS = {
+  small: {
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  medium: {
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  large: {
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+};
+
 // EV-specific constants
 export const EV_CONSTANTS = {
   batteryColors: {
-    critical: COLORS.error,      // 0-15%
-    low: COLORS.warning,         // 16-30%
-    medium: COLORS.accent,       // 31-60%
-    good: COLORS.success,        // 61-85%
-    full: COLORS.primary,        // 86-100%
+    critical: COLORS.error,      // 0-15% (danger red)
+    low: COLORS.warning,         // 16-30% (warning yellow)
+    medium: COLORS.accent,       // 31-60% (orange)
+    good: COLORS.success,        // 61-85% (success green)
+    full: COLORS.primary,        // 86-100% (electric blue)
   },
   chargingColors: {
-    slow: COLORS.warning,        // Slow charging
-    fast: COLORS.primary,        // Fast charging
-    rapid: COLORS.accent,        // Rapid charging
-    ultra: COLORS.accentPurple,  // Ultra-fast charging
+    slow: COLORS.warning,        // Slow charging (warning)
+    fast: COLORS.primary,        // Fast charging (electric blue)
+    rapid: COLORS.accent,        // Rapid charging (orange)
+    ultra: COLORS.secondary,     // Ultra-fast charging (forest green)
   },
   stationStatus: {
     available: COLORS.statusAvailable,
@@ -272,5 +309,40 @@ export const THEME = {
   timing: TIMING,
   zIndex: Z_INDEX,
   breakpoints: BREAKPOINTS,
+  shadows: SHADOWS,
   ev: EV_CONSTANTS,
+};
+
+// Legacy export for backward compatibility with your sample format
+export const Colors = {
+  primary: {
+    forest: '#1B4332',
+    electric: '#2E86AB',
+  },
+  secondary: {
+    white: '#F8F9FA',
+    gray: '#6C757D',
+    lightGray: '#E9ECEF',
+  },
+  accent: {
+    orange: '#F77F00',
+    success: '#28A745',
+    warning: '#FFC107',
+    danger: '#DC3545',
+  },
+  text: {
+    primary: '#212529',
+    secondary: '#6C757D',
+    light: '#ADB5BD',
+    white: '#FFFFFF',
+  },
+  background: {
+    primary: '#FFFFFF',
+    secondary: '#F8F9FA',
+    card: '#FFFFFF',
+  },
+  border: {
+    light: '#E9ECEF',
+    medium: '#DEE2E6',
+  },
 };

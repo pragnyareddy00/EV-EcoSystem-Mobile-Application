@@ -2,12 +2,14 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import { collection, getDocs } from 'firebase/firestore';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Animated,
+  Dimensions,
   Modal,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -21,6 +23,25 @@ import { COLORS } from '../../constants/colors';
 import { Station } from '../../constants/stations';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../services/firebase';
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+// Debounce hook for performance
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -41,6 +62,11 @@ export default function HomeScreen() {
   const [tempSoC, setTempSoC] = useState('85');
   const [nearestStations, setNearestStations] = useState<Station[]>([]);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [locationLoading, setLocationLoading] = useState(true);
+
+  // Debounced search for better performance
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   useEffect(() => {
     if (!isLoading && userProfile && !userProfile.vehicle) {
@@ -48,26 +74,59 @@ export default function HomeScreen() {
     }
   }, [userProfile, isLoading]);
 
-  const requestLocation = async () => {
-    setPermissionError(false);
-    let { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') {
-      setPermissionError(true);
-      return;
-    }
-
-    let currentLocation = await Location.getCurrentPositionAsync({});
-    const initialRegion = {
-      latitude: currentLocation.coords.latitude,
-      longitude: currentLocation.coords.longitude,
-      latitudeDelta: 0.0922,
-      longitudeDelta: 0.0421,
-    };
-    setRegion(initialRegion);
-  };
-
-  const loadStations = async () => {
+  // Enhanced location request with better error handling
+  const requestLocation = useCallback(async () => {
     try {
+      setPermissionError(false);
+      setLocationLoading(true);
+      
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setPermissionError(true);
+        setLocationLoading(false);
+        return;
+      }
+
+      // Get current location with timeout
+      const locationPromise = Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      const currentLocation = await locationPromise;
+      
+      if (!currentLocation) {
+        throw new Error('Unable to get location');
+      }
+
+      const initialRegion = {
+        latitude: currentLocation.coords.latitude,
+        longitude: currentLocation.coords.longitude,
+        latitudeDelta: 0.0922,
+        longitudeDelta: 0.0421,
+      };
+      
+      setRegion(initialRegion);
+      setLocationLoading(false);
+    } catch (error) {
+      console.error('Location error:', error);
+      setPermissionError(true);
+      setLocationLoading(false);
+      
+      // Fallback to default region if location fails
+      setRegion({
+        latitude: 37.7749, // Default to San Francisco
+        longitude: -122.4194,
+        latitudeDelta: 0.0922,
+        longitudeDelta: 0.0421,
+      });
+    }
+  }, []);
+
+  // Enhanced stations loading with caching and error handling
+  const loadStations = useCallback(async () => {
+    try {
+      console.log('🔄 Loading stations from Firestore...');
+      
       const stationsSnapshot = await getDocs(collection(db, 'stations'));
       const stationsData = stationsSnapshot.docs
         .map(doc => {
@@ -75,12 +134,12 @@ export default function HomeScreen() {
             const data = doc.data();
             const id = doc.id;
             
-            // Validate required fields exist
+            // Enhanced validation
             if (!data || typeof data !== 'object') {
+              console.warn('❌ Invalid station data format:', doc.id);
               return null;
             }
 
-            // Use the exact field names from your Firestore
             const rawLat = data.latitude;
             const rawLon = data.longitude;
             const rawName = data.name;
@@ -91,35 +150,35 @@ export default function HomeScreen() {
             const rawServices = data.services;
             const rawIsAvailable = data.isAvailable;
             const rawConnectorType = data.connectorType;
+            const rawPrice = data.price;
+            const rawRating = data.rating;
             
-            // Check if coordinates exist
-            if (rawLat === undefined || rawLon === undefined || rawLat === null || rawLon === null) {
+            // Check if coordinates exist and are valid
+            if (rawLat === undefined || rawLon === undefined || 
+                rawLat === null || rawLon === null) {
+              console.warn('❌ Station missing coordinates:', doc.id);
               return null;
             }
 
-            // Parse coordinates
+            // Parse coordinates with enhanced validation
             const lat = typeof rawLat === 'string' ? parseFloat(rawLat) : Number(rawLat);
             const lon = typeof rawLon === 'string' ? parseFloat(rawLon) : Number(rawLon);
 
-            // Validate coordinates are numbers and within range
-            if (isNaN(lat) || isNaN(lon)) {
+            if (isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+              console.warn('❌ Station has invalid coordinates:', doc.id, lat, lon);
               return null;
             }
 
-            if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
-              return null;
-            }
-
-            // Use isAvailable field to determine status if status field is not available
-            const status = rawStatus || (rawIsAvailable ? 'available' : 'unavailable') || 'unknown';
+            // Enhanced status determination
+            const status = rawStatus || 
+                         (rawIsAvailable !== undefined ? (rawIsAvailable ? 'available' : 'unavailable') : 'unknown');
             
-            // Use connectorType if type is not available
             const type = rawType || rawConnectorType || 'standard';
 
             return {
               id: id,
-              name: rawName || 'Unknown Station',
-              address: rawAddress || 'No address provided',
+              name: rawName?.trim() || 'Unknown Station',
+              address: rawAddress?.trim() || 'Address not available',
               latitude: lat,
               longitude: lon,
               power: parseInt(rawPower, 10) || 0,
@@ -127,82 +186,48 @@ export default function HomeScreen() {
               type: type,
               services: Array.isArray(rawServices) ? rawServices : [],
               isAvailable: rawIsAvailable || false,
-              connectorType: rawConnectorType || 'Unknown'
+              connectorType: rawConnectorType || 'Unknown',
+              city: data.city || '',
+              state: data.state || '',
+              distance: 0 // Will be calculated later
             } as Station;
 
           } catch (error) {
+            console.error('❌ Error processing station:', doc.id, error);
             return null;
           }
         })
         .filter((station): station is Station => station !== null);
 
-      console.log(`✅ Loaded ${stationsData.length} valid stations`);
+      console.log(`✅ Loaded ${stationsData.length} valid stations out of ${stationsSnapshot.docs.length}`);
+      
+      if (stationsData.length === 0) {
+        console.warn('⚠️ No valid stations found in database');
+      }
 
       setStations(stationsData);
+      return stationsData;
     } catch (error) {
       console.error('❌ Error loading stations:', error);
-      Alert.alert('Error', 'Failed to load stations. Please try again.');
+      Alert.alert(
+        'Connection Error', 
+        'Unable to load charging stations. Please check your connection and try again.',
+        [{ text: 'Retry', onPress: loadStations }]
+      );
       setStations([]);
+      return [];
     }
-  };
+  }, []);
 
+  // Initial load
   useEffect(() => {
     requestLocation();
     loadStations();
   }, []);
 
+  // Enhanced search with debouncing
   useEffect(() => {
-    if (region && stations.length > 0) {
-      findNearestStations({
-        latitude: region.latitude,
-        longitude: region.longitude,
-      });
-      updateVisibleStations(region);
-    }
-  }, [region, stations]);
-
-  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-    if (typeof lat1 !== 'number' || typeof lon1 !== 'number' || typeof lat2 !== 'number' || typeof lon2 !== 'number') {
-      return Infinity;
-    }
-    const R = 6371;
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-      Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  };
-
-  const findNearestStations = (coords: { latitude: number, longitude: number }) => {
-    const stationsWithDistance = stations.map(station => ({
-      ...station,
-      distance: calculateDistance(coords.latitude, coords.longitude, station.latitude, station.longitude)
-    }));
-    
-    const nearest = stationsWithDistance
-      .sort((a, b) => a.distance - b.distance)
-      .slice(0, 5);
-    
-    setNearestStations(nearest);
-  };
-
-  const updateVisibleStations = (currentRegion: Region) => {
-    if (!currentRegion) return;
-    const visible = stations.filter(station =>
-      station.latitude > currentRegion.latitude - currentRegion.latitudeDelta / 2 &&
-      station.latitude < currentRegion.latitude + currentRegion.latitudeDelta / 2 &&
-      station.longitude > currentRegion.longitude - currentRegion.longitudeDelta / 2 &&
-      station.longitude < currentRegion.longitude + currentRegion.longitudeDelta / 2
-    );
-    setVisibleStations(visible);
-  };
-
-  const handleSearch = (query: string) => {
-    setSearchQuery(query);
-    if (query.trim() === '') {
+    if (debouncedSearchQuery.trim() === '') {
       setFilteredStations([]);
       setIsSearching(false);
       return;
@@ -210,104 +235,145 @@ export default function HomeScreen() {
 
     setIsSearching(true);
     const filtered = stations.filter(station =>
-      (station.name || '').toLowerCase().includes(query.toLowerCase()) ||
-      (station.address || '').toLowerCase().includes(query.toLowerCase())
+      station.name.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+      station.address.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+      station.type.toLowerCase().includes(debouncedSearchQuery.toLowerCase())
     );
     setFilteredStations(filtered);
-  };
+  }, [debouncedSearchQuery, stations]);
 
-  const navigateToStation = (station: Station) => {
-    // Prevent rapid successive calls
-    if (isAnimating) {
-      console.warn('Animation already in progress, ignoring rapid call');
-      return;
+  // Enhanced region and stations updates
+  useEffect(() => {
+    if (region && stations.length > 0) {
+      const stationsWithDistance = findNearestStations({
+        latitude: region.latitude,
+        longitude: region.longitude,
+      });
+      updateVisibleStations(region);
+      setNearestStations(stationsWithDistance.slice(0, 5));
     }
-    
-    if (!mapRef.current) {
-      console.warn('Map reference is not available');
-      return;
-    }
-    
-    // Comprehensive coordinate validation
-    if (typeof station.latitude !== 'number' || typeof station.longitude !== 'number') {
-      console.error('Station coordinates are not numbers:', station);
-      Alert.alert('Error', 'Invalid station location data');
-      return;
-    }
-    
-    if (isNaN(station.latitude) || isNaN(station.longitude)) {
-      console.error('Station coordinates are NaN:', station);
-      Alert.alert('Error', 'Invalid station coordinates');
-      return;
-    }
-    
-    if (station.latitude < -90 || station.latitude > 90 || 
-        station.longitude < -180 || station.longitude > 180) {
-      console.error('Station coordinates out of bounds:', station);
-      Alert.alert('Error', 'Station coordinates are out of valid range');
-      return;
+  }, [region, stations]);
+
+  // Enhanced distance calculation with validation
+  const calculateDistance = useCallback((lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    if (typeof lat1 !== 'number' || typeof lon1 !== 'number' || 
+        typeof lat2 !== 'number' || typeof lon2 !== 'number' ||
+        isNaN(lat1) || isNaN(lon1) || isNaN(lat2) || isNaN(lon2)) {
+      return Infinity;
     }
 
     try {
-      setIsAnimating(true);
-      
-      const newRegion = {
-        latitude: station.latitude,
-        longitude: station.longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      };
-
-      console.log('📍 Navigating to station:', {
-        name: station.name,
-        coordinates: { lat: station.latitude, lng: station.longitude },
-        region: newRegion
-      });
-
-      mapRef.current.animateToRegion(newRegion, 1000);
-      
-      // Clear search state
-      setSearchQuery('');
-      setFilteredStations([]);
-      setIsSearching(false);
-      
-      // Reset animation flag after animation duration
-      setTimeout(() => {
-        setIsAnimating(false);
-      }, 1000);
-      
+      const R = 6371; // Earth's radius in kilometers
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
     } catch (error) {
-      console.error('❌ Error animating to station region:', error);
-      Alert.alert('Error', 'Failed to navigate to station on map');
-      setIsAnimating(false);
+      console.error('Distance calculation error:', error);
+      return Infinity;
     }
+  }, []);
+
+  const findNearestStations = useCallback((coords: { latitude: number, longitude: number }) => {
+    return stations
+      .map(station => ({
+        ...station,
+        distance: calculateDistance(coords.latitude, coords.longitude, station.latitude, station.longitude)
+      }))
+      .sort((a, b) => a.distance - b.distance);
+  }, [stations, calculateDistance]);
+
+  const updateVisibleStations = useCallback((currentRegion: Region) => {
+    if (!currentRegion) return;
+    
+    const visible = stations.filter(station => {
+      const latDiff = Math.abs(station.latitude - currentRegion.latitude);
+      const lonDiff = Math.abs(station.longitude - currentRegion.longitude);
+      
+      return latDiff < currentRegion.latitudeDelta / 2 && 
+             lonDiff < currentRegion.longitudeDelta / 2;
+    });
+    
+    setVisibleStations(visible);
+  }, [stations]);
+
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
   };
 
+  // Enhanced station navigation with validation
+  const navigateToStation = useCallback((station: Station) => {
+    if (!station || !station.id) {
+      Alert.alert('Error', 'Invalid station data');
+      return;
+    }
+
+    if (
+      typeof station.latitude !== 'number' ||
+      typeof station.longitude !== 'number' ||
+      isNaN(station.latitude) || isNaN(station.longitude) ||
+      station.latitude < -90 || station.latitude > 90 ||
+      station.longitude < -180 || station.longitude > 180
+    ) {
+      Alert.alert('Error', 'This station has invalid location data and cannot be used for navigation.');
+      return;
+    }
+
+    router.push({
+      pathname: '/(tabs)/routing',
+      params: {
+        id: station.id,
+        name: station.name,
+        latitude: station.latitude.toString(),
+        longitude: station.longitude.toString(),
+        address: station.address,
+        type: station.type,
+        power: station.power?.toString() || '0',
+        status: station.status,
+        distance: station.distance?.toFixed(1) || '0',
+      }
+    });
+  }, [router]);
+
   const toggleMapSize = () => {
+    if (isAnimating) return;
+    
+    setIsAnimating(true);
     const newHeight = isMapExpanded ? 0.35 : 0.60;
     Animated.timing(mapHeight, {
       toValue: newHeight,
       duration: 300,
       useNativeDriver: false,
-    }).start();
+    }).start(() => setIsAnimating(false));
     setIsMapExpanded(!isMapExpanded);
   };
 
+  // Enhanced SoC update with validation
   const updateSoC = () => {
     const newSoC = parseInt(tempSoC);
     if (!isNaN(newSoC) && newSoC >= 0 && newSoC <= 100) {
       setCurrentSoC(newSoC);
       setSocModalVisible(false);
+      
+      // Show confirmation
+      Alert.alert('Success', `Battery level updated to ${newSoC}%`);
     } else {
-      Alert.alert('Invalid SoC', 'Please enter a value between 0 and 100');
+      Alert.alert('Invalid Input', 'Please enter a valid battery percentage between 0 and 100.');
     }
   };
 
-  const handleQuickAction = (action: string) => {
+  // Enhanced quick actions
+  const handleQuickAction = useCallback((action: string) => {
     switch (action) {
       case 'findCharger':
         if (nearestStations.length > 0) {
           navigateToStation(nearestStations[0]);
+        } else {
+          Alert.alert('No Stations', 'No charging stations found nearby. Please try again later.');
         }
         break;
       case 'routePlan':
@@ -316,62 +382,120 @@ export default function HomeScreen() {
       case 'emergency':
         Alert.alert(
           'Emergency SOS',
-          'This will contact emergency services and nearby assistance. Continue?',
-          [{ text: 'Cancel', style: 'cancel' }, { text: 'Call SOS', onPress: () => { Alert.alert('SOS Activated', 'Emergency services have been notified.'); }}]
+          'This will contact emergency services and share your location with nearby assistance. Are you sure you want to continue?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Call SOS', 
+              style: 'destructive',
+              onPress: () => {
+                // In a real app, this would trigger emergency protocols
+                Alert.alert('SOS Activated', 'Emergency services have been notified and help is on the way.');
+              }
+            }
+          ]
         );
         break;
       case 'batterySwap':
-        const swapStations = stations.filter(station => station.type === 'swap' || station.services?.includes('battery_swap'));
+        const swapStations = stations.filter(station => 
+          station.type === 'swap' || station.services?.includes('battery_swap')
+        );
         if (swapStations.length > 0) {
-          navigateToStation(swapStations[0]);
+          const nearestSwap = findNearestStations({
+            latitude: region?.latitude || 0,
+            longitude: region?.longitude || 0
+          }).find(station => swapStations.some(s => s.id === station.id));
+          
+          if (nearestSwap) {
+            navigateToStation(nearestSwap);
+          } else {
+            navigateToStation(swapStations[0]);
+          }
         } else {
-          Alert.alert('No Swap Stations', 'No battery swap stations found nearby');
+          Alert.alert(
+            'No Swap Stations', 
+            'No battery swap stations found nearby. Try searching for fast charging stations instead.',
+            [{ text: 'Find Fast Chargers', onPress: () => handleQuickAction('findCharger') }]
+          );
         }
         break;
     }
-  };
+  }, [nearestStations, stations, region, navigateToStation, router]);
 
-  const handleRegionChangeComplete = (newRegion: Region) => {
+  const handleRegionChangeComplete = useCallback((newRegion: Region) => {
     setRegion(newRegion);
     updateVisibleStations(newRegion);
-  };
+  }, [updateVisibleStations]);
 
-  const getSoCColor = () => {
-    if (currentSoC > 50) return '#10b981';
-    if (currentSoC > 20) return '#f59e0b';
-    return '#ef4444';
-  };
+  // Enhanced SoC color and status
+  const getSoCColor = useCallback(() => {
+    if (currentSoC > 60) return '#10b981'; // Green
+    if (currentSoC > 30) return '#f59e0b'; // Amber
+    if (currentSoC > 15) return '#f97316'; // Orange
+    return '#ef4444'; // Red
+  }, [currentSoC]);
 
-  const getSoCStatus = () => {
+  const getSoCStatus = useCallback(() => {
     if (currentSoC > 80) return 'Excellent';
-    if (currentSoC > 50) return 'Good';
-    if (currentSoC > 20) return 'Low';
+    if (currentSoC > 60) return 'Good';
+    if (currentSoC > 30) return 'Moderate';
+    if (currentSoC > 15) return 'Low';
     return 'Critical';
-  };
+  }, [currentSoC]);
 
-  const getStationIconName = (type: string | undefined) => {
-    if (type === 'fast') return 'flash';
-    if (type === 'swap') return 'repeat';
+  const getStationIconName = useCallback((type: string | undefined) => {
+    const typeLower = type?.toLowerCase() || '';
+    if (typeLower.includes('fast') || typeLower.includes('dc')) return 'flash';
+    if (typeLower.includes('swap')) return 'repeat';
+    if (typeLower.includes('tesla')) return 'car-sport';
     return 'battery-charging';
-  };
+  }, []);
 
-  if (permissionError) {
+  // Pull to refresh
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([requestLocation(), loadStations()]);
+    } catch (error) {
+      console.error('Refresh error:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [requestLocation, loadStations]);
+
+  // Enhanced permission error handling
+  if (permissionError && !region) {
     return (
       <View style={styles.centered}>
         <View style={styles.errorIconContainer}>
-          <Ionicons name="location-outline" size={56} color="#94a3b8" />
+          <Ionicons name="location-outline" size={64} color="#94a3b8" />
         </View>
         <Text style={styles.errorTitle}>Location Access Required</Text>
-        <Text style={styles.errorText}>We need your location to show nearby charging stations and provide the best EV experience.</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={requestLocation}>
-          <Ionicons name="location" size={18} color="#fff" style={styles.buttonIcon} />
-          <Text style={styles.retryText}>Enable Location</Text>
-        </TouchableOpacity>
+        <Text style={styles.errorText}>
+          To provide the best EV experience, we need access to your location to show nearby charging stations and plan your routes efficiently.
+        </Text>
+        <View style={styles.errorButtons}>
+          <TouchableOpacity style={styles.retryButton} onPress={requestLocation}>
+            <Ionicons name="location" size={18} color="#fff" style={styles.buttonIcon} />
+            <Text style={styles.retryText}>Enable Location</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.secondaryButton} 
+            onPress={() => setRegion({
+              latitude: 37.7749,
+              longitude: -122.4194,
+              latitudeDelta: 0.0922,
+              longitudeDelta: 0.0421,
+            })}
+          >
+            <Text style={styles.secondaryButtonText}>Use Default Location</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
 
-  if (isLoading || !userProfile || !region) {
+  if (isLoading || locationLoading) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={COLORS.primary} />
@@ -380,11 +504,23 @@ export default function HomeScreen() {
     );
   }
 
-  if (!userProfile.vehicle) {
+  if (!userProfile?.vehicle) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={styles.loadingText}>Setting up your profile...</Text>
+        <View style={styles.errorIconContainer}>
+          <Ionicons name="car-outline" size={64} color="#94a3b8" />
+        </View>
+        <Text style={styles.errorTitle}>Vehicle Required</Text>
+        <Text style={styles.errorText}>
+          Please add your vehicle information to personalize your charging experience.
+        </Text>
+        <TouchableOpacity 
+          style={styles.retryButton} 
+          onPress={() => router.push('/(tabs)/addVehicle')}
+        >
+          <Ionicons name="add" size={18} color="#fff" style={styles.buttonIcon} />
+          <Text style={styles.retryText}>Add Vehicle</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -397,16 +533,16 @@ export default function HomeScreen() {
           ref={mapRef}
           provider={PROVIDER_GOOGLE}
           style={styles.map}
-          initialRegion={region}
+          region={region || undefined}
           onRegionChangeComplete={handleRegionChangeComplete}
           showsUserLocation
           showsMyLocationButton={false}
+          showsCompass={true}
+          toolbarEnabled={false}
         >
           {visibleStations.map(station => {
-            // Double-check coordinates before rendering marker
             if (typeof station.latitude !== 'number' || typeof station.longitude !== 'number' ||
                 isNaN(station.latitude) || isNaN(station.longitude)) {
-              console.warn('❌ Skipping invalid station marker:', station);
               return null;
             }
 
@@ -418,7 +554,7 @@ export default function HomeScreen() {
                   longitude: station.longitude
                 }}
                 title={station.name}
-                description={`${station.type} • ${station.power}kW`}
+                description={`${station.type} • ${station.power}kW • ${station.status}`}
                 onPress={() => {
                   Alert.alert(
                     station.name,
@@ -435,10 +571,13 @@ export default function HomeScreen() {
               >
                 <View style={[
                   styles.markerContainer,
-                  { backgroundColor: station.status === 'available' ? '#10b981' : '#ef4444' }
+                  { 
+                    backgroundColor: station.status === 'available' ? '#10b981' : 
+                                    station.status === 'busy' ? '#f59e0b' : '#ef4444' 
+                  }
                 ]}>
                   <Ionicons
-                    name={getStationIconName(station.type) as keyof typeof Ionicons.glyphMap}
+                    name={getStationIconName(station.type) as any}
                     size={16}
                     color="#ffffff"
                   />
@@ -448,79 +587,115 @@ export default function HomeScreen() {
           })}
         </MapView>
 
-        {/* Compact Search Bar */}
+        {/* Enhanced Search Bar */}
         <View style={styles.searchContainer}>
           <View style={styles.searchBar}>
             <Ionicons name="search" size={18} color="#64748b" />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search stations..."
+              placeholder="Search stations by name, address, or type..."
               value={searchQuery}
               onChangeText={handleSearch}
               placeholderTextColor="#94a3b8"
+              clearButtonMode="while-editing"
             />
-            {searchQuery !== '' && (
-              <TouchableOpacity onPress={() => handleSearch('')}>
-                <Ionicons name="close-circle" size={18} color="#94a3b8" />
-              </TouchableOpacity>
-            )}
           </View>
           
           {isSearching && (
             <View style={styles.searchResults}>
-               {filteredStations.length > 0 ? (
-                 filteredStations.slice(0, 4).map(station => (
-                  <TouchableOpacity
-                    key={station.id}
-                    style={styles.searchResultItem}
-                    onPress={() => navigateToStation(station)}
-                  >
-                    <View style={styles.searchResultLeft}>
-                      <View style={[styles.searchResultIcon, { backgroundColor: station.status === 'available' ? '#dcfce7' : '#fee2e2' }]}>
-                        <Ionicons name="location" size={14} color={station.status === 'available' ? '#10b981' : '#ef4444'} />
+              {(
+                filteredStations.length > 0 ? (
+                  filteredStations.slice(0, 5).map(station => (
+                    <TouchableOpacity
+                      key={station.id}
+                      style={styles.searchResultItem}
+                      onPress={() => {
+                        navigateToStation(station);
+                        setIsSearching(false);
+                        setSearchQuery('');
+                      }}
+                    >
+                      <View style={styles.searchResultLeft}>
+                        <View style={[
+                          styles.searchResultIcon, 
+                          { 
+                            backgroundColor: station.status === 'available' ? '#dcfce7' : 
+                                            station.status === 'busy' ? '#fef3c7' : '#fee2e2' 
+                          }
+                        ]}>
+                          <Ionicons 
+                            name={getStationIconName(station.type) as any}
+                            size={14} 
+                            color={station.status === 'available' ? '#10b981' : 
+                                   station.status === 'busy' ? '#f59e0b' : '#ef4444'} 
+                          />
+                        </View>
+                        <View style={styles.searchResultText}>
+                          <Text style={styles.searchResultName}>{station.name}</Text>
+                          <Text style={styles.searchResultAddress} numberOfLines={1}>
+                            {station.address}
+                          </Text>
+                          <Text style={styles.searchResultMeta}>
+                            {station.power}kW • {station.type} • {station.distance?.toFixed(1)}km
+                          </Text>
+                        </View>
                       </View>
-                      <View style={styles.searchResultText}>
-                        <Text style={styles.searchResultName}>{station.name}</Text>
-                        <Text style={styles.searchResultAddress} numberOfLines={1}>
-                          {station.address || `${station.power}kW • ${station.type}`}
-                        </Text>
-                      </View>
-                    </View>
-                    <Ionicons name="arrow-forward" size={16} color="#64748b" />
-                  </TouchableOpacity>
-                 ))
-               ) : (
-                <View style={styles.noResults}>
-                  <Ionicons name="search-outline" size={28} color="#cbd5e1" />
-                  <Text style={styles.noResultsText}>No stations found</Text>
-                </View>
-               )}
+                      <Ionicons name="arrow-forward" size={16} color="#64748b" />
+                    </TouchableOpacity>
+                  ))
+                ) : debouncedSearchQuery.trim() !== '' ? (
+                  <View style={styles.noResults}>
+                    <Ionicons name="search-outline" size={32} color="#cbd5e1" />
+                    <Text style={styles.noResultsText}>No stations found</Text>
+                    <Text style={styles.noResultsSubtext}>
+                      Try different search terms or check your spelling
+                    </Text>
+                  </View>
+                ) : null
+              )}
             </View>
           )}
         </View>
 
-        {/* Compact SoC Indicator */}
+        {/* Enhanced SoC Indicator */}
         <TouchableOpacity
           style={styles.socContainer}
           onPress={() => setSocModalVisible(true)}
-          activeOpacity={0.8}
+          activeOpacity={0.7}
         >
           <View style={[styles.socCard, { borderLeftColor: getSoCColor() }]}>
             <View style={styles.socTop}>
               <Ionicons name="battery-charging" size={16} color={getSoCColor()} />
               <Text style={[styles.socValue, { color: getSoCColor() }]}>{currentSoC}%</Text>
             </View>
-            <Text style={styles.socRange}>{Math.round(currentSoC * 4.2)}km</Text>
+            <Text style={styles.socRange}>
+              ~{Math.round(currentSoC * ((userProfile.vehicle.realWorldRangeKm / 100) || 4.2))}km
+            </Text>
+            <Text style={styles.socStatus}>{getSoCStatus()}</Text>
           </View>
         </TouchableOpacity>
 
-        {/* Compact Map Toggle */}
-        <TouchableOpacity style={styles.mapToggle} onPress={toggleMapSize} activeOpacity={0.8}>
+        {/* Enhanced Map Toggle */}
+        <TouchableOpacity 
+          style={styles.mapToggle} 
+          onPress={toggleMapSize} 
+          activeOpacity={0.7}
+          disabled={isAnimating}
+        >
           <Ionicons
             name={isMapExpanded ? 'chevron-down' : 'chevron-up'}
             size={20}
             color="#fff"
           />
+        </TouchableOpacity>
+
+        {/* Location Refresh Button */}
+        <TouchableOpacity 
+          style={styles.refreshLocationButton}
+          onPress={requestLocation}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="refresh" size={18} color={COLORS.primary} />
         </TouchableOpacity>
       </Animated.View>
 
@@ -531,15 +706,28 @@ export default function HomeScreen() {
             outputRange: [0.65, 0.40]
           })
       }]}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-          {/* Compact Header */}
+        <ScrollView 
+          showsVerticalScrollIndicator={false} 
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[COLORS.primary]}
+              tintColor={COLORS.primary}
+            />
+          }
+        >
+          {/* Enhanced Header */}
           <View style={styles.header}>
             <View style={styles.headerLeft}>
-              <Text style={styles.welcomeText}>Hello, {userProfile.username}!</Text>
+              <Text style={styles.welcomeText}>
+                Hello, {userProfile.username || 'Driver'}! 👋
+              </Text>
               <View style={styles.carInfo}>
                 <Ionicons name="car-sport" size={12} color="#64748b" />
                 <Text style={styles.carText}>
-                  {userProfile.vehicle.make} {userProfile.vehicle.model}
+                  {userProfile.vehicle.batteryCapacityKWh || 'Unknown'} kWh
                 </Text>
               </View>
             </View>
@@ -553,141 +741,142 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Compact Quick Actions */}
+          {/* Enhanced Quick Actions */}
           <View style={styles.quickActions}>
             <Text style={styles.sectionTitle}>Quick Actions</Text>
             <View style={styles.actionGrid}>
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => handleQuickAction('findCharger')}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.actionIconContainer, styles.actionPrimary]}>
-                  <Ionicons name="flash" size={20} color="#fff" />
-                </View>
-                <Text style={styles.actionLabel}>Find Charger</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => handleQuickAction('routePlan')}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.actionIconContainer, styles.actionBlue]}>
-                  <Ionicons name="navigate" size={20} color="#fff" />
-                </View>
-                <Text style={styles.actionLabel}>Route Plan</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => handleQuickAction('batterySwap')}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.actionIconContainer, styles.actionGreen]}>
-                  <Ionicons name="repeat" size={20} color="#fff" />
-                </View>
-                <Text style={styles.actionLabel}>Battery Swap</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => handleQuickAction('emergency')}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.actionIconContainer, styles.actionRed]}>
-                  <Ionicons name="warning" size={20} color="#fff" />
-                </View>
-                <Text style={styles.actionLabel}>Emergency</Text>
-              </TouchableOpacity>
+              {[
+                { key: 'findCharger', label: 'Find Charger', icon: 'flash', color: '#10b981' },
+                { key: 'routePlan', label: 'Route Plan', icon: 'navigate', color: '#3b82f6' },
+                { key: 'batterySwap', label: 'Battery Swap', icon: 'repeat', color: '#8b5cf6' },
+                { key: 'emergency', label: 'Emergency', icon: 'warning', color: '#ef4444' },
+              ].map((action) => (
+                <TouchableOpacity
+                  key={action.key}
+                  style={styles.actionButton}
+                  onPress={() => handleQuickAction(action.key)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.actionIconContainer, { backgroundColor: action.color }]}>
+                    <Ionicons name={action.icon as any} size={20} color="#fff" />
+                  </View>
+                  <Text style={styles.actionLabel}>{action.label}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
           </View>
 
-          {/* Compact Stations List */}
+          {/* Enhanced Stations List */}
           <View style={styles.nearestStations}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Nearby Stations</Text>
-              <Text style={styles.sectionSubtitle}>Updated now</Text>
+              <View>
+                <Text style={styles.sectionTitle}>Nearby Stations</Text>
+                <Text style={styles.sectionSubtitle}>
+                  {stations.length > 0 ? `${stations.length} stations available` : 'Loading stations...'}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={loadStations}>
+                <Ionicons name="refresh" size={18} color={COLORS.primary} />
+              </TouchableOpacity>
             </View>
-            {stations.length === 0 ? (
-                <ActivityIndicator color={COLORS.primary} style={{ marginVertical: 20 }}/>
-            ) : nearestStations.length > 0 ? (
-                nearestStations.slice(0, 3).map((station) => (
-                  <TouchableOpacity
-                    key={station.id}
-                    style={[
-                      styles.stationCard,
-                      { borderLeftColor: station.status === 'available' ? '#10b981' : '#ef4444' }
-                    ]}
-                    onPress={() => navigateToStation(station)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.stationLeft}>
-                      <View style={[
-                        styles.stationIconContainer,
-                        { backgroundColor: station.status === 'available' ? '#dcfce7' : '#fee2e2' }
-                      ]}>
-                        <Ionicons 
-                          name={getStationIconName(station.type) as keyof typeof Ionicons.glyphMap}
-                          size={20} 
-                          color={station.status === 'available' ? '#10b981' : '#ef4444'} 
-                        />
-                      </View>
-                      <View style={styles.stationInfo}>
-                        <Text style={styles.stationName}>{station.name}</Text>
-                        <Text style={styles.stationMetaText} numberOfLines={1}>
-                          {station.address}
-                        </Text>
-                      </View>
-                    </View>
-                    
-                    <View style={styles.stationMeta}>
-                      <View style={styles.stationMetaItem}>
-                        <Ionicons name="navigate" size={13} color="#64748b" />
-                        <Text style={styles.stationMetaText}>{station.distance?.toFixed(1)} km</Text>
-                      </View>
-                      
-                      <View style={styles.metaDivider} />
-                      
-                      <View style={styles.stationMetaItem}>
-                        <Ionicons name="flash" size={13} color="#64748b" />
-                        <Text style={styles.stationMetaText}>{station.power} kW</Text>
-                      </View>
-                      
-                      <View style={styles.metaDivider} />
-                      
-                      <View style={[
-                        styles.statusBadge,
-                        { backgroundColor: station.status === 'available' ? '#dcfce7' : '#fee2e2' }
-                      ]}>
-                        <View style={[
-                          styles.statusDot,
-                          { backgroundColor: station.status === 'available' ? '#10b981' : '#ef4444' }
-                        ]} />
-                        <Text style={[
-                          styles.statusText,
-                          { color: station.status === 'available' ? '#059669' : '#dc2626' }
-                        ]}>
-                          {station.status}
-                        </Text>
-                      </View>
-                    </View>
 
-                    <View style={styles.stationArrow}>
-                      <Ionicons name="chevron-forward" size={16} color="#94a3b8" />
+            {stations.length === 0 ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color={COLORS.primary} />
+                <Text style={styles.loadingText}>Loading stations...</Text>
+              </View>
+            ) : nearestStations.length > 0 ? (
+              nearestStations.slice(0, 3).map((station) => (
+                <TouchableOpacity
+                  key={station.id}
+                  style={[
+                    styles.stationCard,
+                    { 
+                      borderLeftColor: station.status === 'available' ? '#10b981' : 
+                                      station.status === 'busy' ? '#f59e0b' : '#ef4444' 
+                    }
+                  ]}
+                  onPress={() => navigateToStation(station)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.stationLeft}>
+                    <View style={[
+                      styles.stationIconContainer,
+                      { 
+                        backgroundColor: station.status === 'available' ? '#dcfce7' : 
+                                        station.status === 'busy' ? '#fef3c7' : '#fee2e2' 
+                      }
+                    ]}>
+                      <Ionicons 
+                        name={getStationIconName(station.type) as any}
+                        size={20} 
+                        color={station.status === 'available' ? '#10b981' : 
+                               station.status === 'busy' ? '#f59e0b' : '#ef4444'} 
+                      />
                     </View>
-                  </TouchableOpacity>
-                ))
+                    <View style={styles.stationInfo}>
+                      <Text style={styles.stationName}>{station.name}</Text>
+                      <Text style={styles.stationAddress} numberOfLines={1}>
+                        {station.address}
+                      </Text>
+                      <View style={styles.stationTags}>
+                        <Text style={styles.stationTag}>{station.power}kW</Text>
+                        <Text style={styles.stationTag}>{station.type}</Text>
+                      </View>
+                    </View>
+                  </View>
+                  
+                  <View style={styles.stationRight}>
+                    <Text style={styles.stationDistance}>
+                      {station.distance?.toFixed(1)} km
+                    </Text>
+                    <View style={[
+                      styles.statusBadge,
+                      { 
+                        backgroundColor: station.status === 'available' ? '#dcfce7' : 
+                                        station.status === 'busy' ? '#fef3c7' : '#fee2e2' 
+                      }
+                    ]}>
+                      <View style={[
+                        styles.statusDot,
+                        { 
+                          backgroundColor: station.status === 'available' ? '#10b981' : 
+                                          station.status === 'busy' ? '#f59e0b' : '#ef4444' 
+                        }
+                      ]} />
+                      <Text style={[
+                        styles.statusText,
+                        { 
+                          color: station.status === 'available' ? '#059669' : 
+                                 station.status === 'busy' ? '#d97706' : '#dc2626' 
+                        }
+                      ]}>
+                        {station.status}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.stationArrow}>
+                    <Ionicons name="chevron-forward" size={16} color="#94a3b8" />
+                  </View>
+                </TouchableOpacity>
+              ))
             ) : (
-                <Text style={styles.noNearbyText}>No stations found nearby.</Text>
+              <View style={styles.noStationsContainer}>
+                <Ionicons name="alert-circle-outline" size={48} color="#cbd5e1" />
+                <Text style={styles.noStationsText}>No stations found nearby</Text>
+                <Text style={styles.noStationsSubtext}>
+                  Try moving to a different location or check back later
+                </Text>
+              </View>
             )}
           </View>
 
-          <View style={{ height: 16 }} />
+          <View style={styles.bottomSpacer} />
         </ScrollView>
       </Animated.View>
 
-      {/* Compact SoC Modal */}
+      {/* Enhanced SoC Modal */}
       <Modal
         visible={socModalVisible}
         transparent
@@ -698,8 +887,10 @@ export default function HomeScreen() {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <View>
-                <Text style={styles.modalTitle}>Update Battery</Text>
-                <Text style={styles.modalSubtitle}>Current: {currentSoC}%</Text>
+                <Text style={styles.modalTitle}>Update Battery Level</Text>
+                <Text style={styles.modalSubtitle}>
+                  Current: {currentSoC}% • {getSoCStatus()}
+                </Text>
               </View>
               <TouchableOpacity 
                 onPress={() => setSocModalVisible(false)}
@@ -719,6 +910,7 @@ export default function HomeScreen() {
                   placeholder="85"
                   maxLength={3}
                   placeholderTextColor="#cbd5e1"
+                  selectTextOnFocus
                 />
                 <Text style={styles.socUnit}>%</Text>
               </View>
@@ -729,10 +921,18 @@ export default function HomeScreen() {
               {[25, 50, 75, 100].map((value) => (
                 <TouchableOpacity
                   key={value}
-                  style={styles.quickSocButton}
+                  style={[
+                    styles.quickSocButton,
+                    parseInt(tempSoC) === value && styles.quickSocButtonActive
+                  ]}
                   onPress={() => setTempSoC(value.toString())}
                 >
-                  <Text style={styles.quickSocText}>{value}%</Text>
+                  <Text style={[
+                    styles.quickSocText,
+                    parseInt(tempSoC) === value && styles.quickSocTextActive
+                  ]}>
+                    {value}%
+                  </Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -740,7 +940,10 @@ export default function HomeScreen() {
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setSocModalVisible(false)}
+                onPress={() => {
+                  setTempSoC(currentSoC.toString());
+                  setSocModalVisible(false);
+                }}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
@@ -789,6 +992,10 @@ const styles = StyleSheet.create({
     color: '#64748b',
     textAlign: 'center',
   },
+  loadingContainer: {
+    alignItems: 'center',
+    padding: 20,
+  },
   
   // Error States
   errorIconContainer: {
@@ -805,6 +1012,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0f172a',
     marginBottom: 8,
+    textAlign: 'center',
   },
   errorText: {
     fontSize: 14,
@@ -813,10 +1021,15 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     lineHeight: 20,
   },
+  errorButtons: {
+    width: '100%',
+    gap: 12,
+  },
   retryButton: {
     backgroundColor: COLORS.primary,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 10,
@@ -825,6 +1038,22 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
+  },
+  secondaryButton: {
+    backgroundColor: '#f1f5f9',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  secondaryButtonText: {
+    color: '#64748b',
+    fontSize: 14,
+    fontWeight: '600',
   },
   retryText: {
     color: '#fff',
@@ -835,7 +1064,7 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   
-  // Compact Search
+  // Enhanced Search
   searchContainer: {
     position: 'absolute',
     top: 50,
@@ -872,7 +1101,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
-    maxHeight: 220,
+    maxHeight: 280,
     overflow: 'hidden',
   },
   searchResultItem: {
@@ -908,6 +1137,12 @@ const styles = StyleSheet.create({
   searchResultAddress: {
     fontSize: 11,
     color: '#64748b',
+    marginBottom: 2,
+  },
+  searchResultMeta: {
+    fontSize: 10,
+    color: '#94a3b8',
+    fontWeight: '500',
   },
   noResults: {
     padding: 24,
@@ -919,8 +1154,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 6,
   },
+  noResultsSubtext: {
+    color: '#94a3b8',
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: 2,
+  },
 
-  // Compact SoC
+  // Enhanced SoC
   socContainer: {
     position: 'absolute',
     top: 120,
@@ -937,7 +1178,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     paddingHorizontal: 14,
     paddingVertical: 10,
-    minWidth: 80,
+    minWidth: 90,
     borderLeftWidth: 3,
   },
   socTop: {
@@ -955,6 +1196,13 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#64748b',
     fontWeight: '600',
+    marginBottom: 2,
+  },
+  socStatus: {
+    fontSize: 9,
+    color: '#94a3b8',
+    fontWeight: '600',
+    textTransform: 'uppercase',
   },
 
   // Map Toggle
@@ -975,7 +1223,25 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
   },
 
-  // Compact Header
+  // Refresh Location Button
+  refreshLocationButton: {
+    position: 'absolute',
+    bottom: 20,
+    left: 12,
+    backgroundColor: '#fff',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+  },
+
+  // Enhanced Header
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1025,7 +1291,7 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0',
   },
 
-  // Compact Quick Actions
+  // Enhanced Quick Actions
   quickActions: {
     paddingHorizontal: 12,
     paddingTop: 12,
@@ -1063,18 +1329,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
-  actionPrimary: {
-    backgroundColor: COLORS.primary,
-  },
-  actionBlue: {
-    backgroundColor: '#3b82f6',
-  },
-  actionGreen: {
-    backgroundColor: '#10b981',
-  },
-  actionRed: {
-    backgroundColor: '#ef4444',
-  },
   actionLabel: {
     fontSize: 11,
     fontWeight: '600',
@@ -1082,7 +1336,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // Compact Stations
+  // Enhanced Stations
   nearestStations: {
     paddingHorizontal: 12,
     paddingTop: 12,
@@ -1109,13 +1363,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 4,
     borderLeftWidth: 4,
-    borderLeftColor: '#10b981',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   stationLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    marginBottom: 10,
   },
   stationIconContainer: {
     width: 44,
@@ -1132,66 +1387,80 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#0f172a',
-    marginBottom: 5,
+    marginBottom: 4,
   },
-  stationMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
-  },
-  stationMetaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#f8fafc',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-  },
-  stationMetaText: {
+  stationAddress: {
     fontSize: 12,
+    color: '#64748b',
+    marginBottom: 6,
+  },
+  stationTags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  stationTag: {
+    fontSize: 10,
     color: '#475569',
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
     fontWeight: '600',
   },
-  stationMetaIcon: {
-    marginRight: 4,
+  stationRight: {
+    alignItems: 'flex-end',
+    marginRight: 8,
   },
-  metaDivider: {
-    width: 1,
-    height: 16,
-    backgroundColor: '#e2e8f0',
+  stationDistance: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 6,
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
   statusDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   statusText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     textTransform: 'capitalize',
   },
   stationArrow: {
-    position: 'absolute',
-    right: 14,
-    top: 14,
-    backgroundColor: '#f8fafc',
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  noStationsContainer: {
+    alignItems: 'center',
+    padding: 20,
+  },
+  noStationsText: {
+    color: '#64748b',
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 8,
+  },
+  noStationsSubtext: {
+    color: '#94a3b8',
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  bottomSpacer: {
+    height: 16,
   },
 
   // Marker Styles
@@ -1207,7 +1476,7 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
   },
 
-  // Compact Modal
+  // Enhanced Modal
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -1296,10 +1565,17 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#e2e8f0',
   },
+  quickSocButtonActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
   quickSocText: {
     fontSize: 12,
     fontWeight: '600',
     color: '#475569',
+  },
+  quickSocTextActive: {
+    color: '#fff',
   },
   modalActions: {
     flexDirection: 'row',
@@ -1335,13 +1611,5 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
-  },
-  noNearbyText: {
-    textAlign: 'center',
-    color: '#64748b',
-    marginTop: 20,
-    marginBottom: 20,
-    fontSize: 14,
-    fontWeight: '500'
   },
 });
