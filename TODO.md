@@ -1,12 +1,9 @@
-# TODO: Fix Routing Issues in routing.tsx
-
-## Issues Identified
-1. **Green routes appearing as polylines**: Investigate why green polylines are rendering alongside the blue route polyline.
-2. **Starting point arrow flickering**: Add heading smoothing to reduce rapid rotations from location updates.
-3. **EV station marker cut in half**: Adjust map padding or marker positioning to prevent clipping at the bottom edge.
+# TODO: Fix TypeScript Errors in Style Properties
 
 ## Tasks
-- [ ] Investigate NavigationService for multiple routes or green polylines
-- [ ] Add heading smoothing logic to reduce arrow flickering
-- [ ] Modify fitToCoordinates padding to ensure markers are fully visible
-- [ ] Test changes on device/simulator to verify fixes
+- [ ] Add `withOpacity` utility function to `constants/colors.ts`
+- [ ] Update `app/(tabs)/sos.tsx` to import and use `withOpacity` for color opacity
+- [ ] Replace `COLORS.primary + '20'` with `withOpacity(COLORS.primary, 0.2)` in styles
+- [ ] Run TypeScript check to verify errors are resolved
+- [ ] Test the app to ensure styles render correctly
+- [ ] Check other open files for similar issues and fix if found

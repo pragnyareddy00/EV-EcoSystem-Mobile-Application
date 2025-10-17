@@ -4,19 +4,19 @@ import { useRouter } from 'expo-router';
 import { collection, getDocs } from 'firebase/firestore';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  Dimensions,
-  Modal,
-  RefreshControl,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Animated,
+    Dimensions,
+    Modal,
+    RefreshControl,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import { COLORS } from '../../constants/colors';
@@ -754,7 +754,15 @@ export default function HomeScreen() {
                 <TouchableOpacity
                   key={action.key}
                   style={styles.actionButton}
-                  onPress={() => handleQuickAction(action.key)}
+                  onPress={() => {
+                    // Route immediately to SOS screen for emergency quick access
+                    if (action.key === 'emergency') {
+                      router.push('/(tabs)/sos');
+                      return;
+                    }
+
+                    handleQuickAction(action.key);
+                  }}
                   activeOpacity={0.7}
                 >
                   <View style={[styles.actionIconContainer, { backgroundColor: action.color }]}>

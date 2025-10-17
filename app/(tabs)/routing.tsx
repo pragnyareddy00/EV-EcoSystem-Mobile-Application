@@ -37,7 +37,7 @@ const UserLocationMarker = ({
         coordinate={coordinate}
         anchor={{ x: 0.5, y: 0.5 }}
         flat={true}
-        tracksViewChanges={false}
+            tracksViewChanges={true}
         zIndex={20}
     >
         <View style={styles.userMarkerContainer}>
@@ -61,16 +61,18 @@ export default function RoutingScreen() {
     const params = useLocalSearchParams();
     const mapRef = useRef<MapView>(null);
 
-    const station = {
+    const [missingStation, setMissingStation] = useState(false);
+
+    const station = params.id ? {
         id: params.id as string,
-        name: params.name as string,
-        latitude: parseFloat(params.latitude as string),
-        longitude: parseFloat(params.longitude as string),
-        address: params.address as string,
-        type: params.type as string,
-        power: params.power as string,
-        status: params.status as string,
-    };
+        name: (params.name as string) || 'Unknown',
+        latitude: parseFloat((params.latitude as string) || '0'),
+        longitude: parseFloat((params.longitude as string) || '0'),
+        address: (params.address as string) || '',
+        type: (params.type as string) || '',
+        power: (params.power as string) || '0',
+        status: (params.status as string) || 'unknown',
+    } : null;
 
     const [userLocation, setUserLocation] = useState<Coordinate | null>(null);
     const [routeData, setRouteData] = useState<Route | null>(null);
@@ -162,7 +164,6 @@ export default function RoutingScreen() {
                 longitude: 78.4867,
             };
             setStartLocation(defaultLocation);
-            setUserLocation(defaultLocation);
             setNavigation(prev => ({ ...prev, currentLocation: defaultLocation }));
             await calculateRoute(defaultLocation);
         } finally {
@@ -174,6 +175,11 @@ export default function RoutingScreen() {
         try {
             setIsLoading(true);
 
+            if (!station) {
+                console.warn('No destination station provided - skipping route calculation');
+                return;
+            }
+
             const originStr = `${origin.latitude},${origin.longitude}`;
             const destinationStr = `${station.latitude},${station.longitude}`;
 
@@ -182,10 +188,19 @@ export default function RoutingScreen() {
             const route = await NavigationService.getDirections(originStr, destinationStr);
 
             if (route) {
-                setRouteData(route);
-                const decodedPath = NavigationService.decodePolyline(route.overview_polyline.points);
-                console.log('Route coordinates decoded:', decodedPath.length, 'points');
-                setRouteCoordinates(decodedPath);
+        setRouteData(route);
+        const decodedPath = NavigationService.decodePolyline(route.overview_polyline.points);
+        setRouteCoordinates(decodedPath);
+
+                // Initialize moving arrow so user can see direction immediately
+                if (decodedPath.length > 0) {
+                    const initIndex = Math.min(10, decodedPath.length - 1);
+                    const initPos = decodedPath[initIndex];
+                    const nextPos = decodedPath[Math.min(initIndex + 1, decodedPath.length - 1)];
+                    const initBearing = calculateBearing(initPos, nextPos);
+                    setMovingArrowPosition(initPos);
+                    setMovingArrowHeading(initBearing);
+                }
 
                 if (mapRef.current && decodedPath.length > 0) {
                     setTimeout(() => {
@@ -457,6 +472,33 @@ export default function RoutingScreen() {
         );
     }
 
+    if (missingStation || !station) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <View style={styles.loadingContainer}>
+                    <Ionicons name="alert-circle-outline" size={48} color="#cbd5e1" />
+                    <Text style={styles.loadingText}>Please select a station before proceeding.</Text>
+                    <TouchableOpacity
+                        style={[styles.mapControlButton, { marginTop: 16 }]}
+                        onPress={() => router.push('/(tabs)/home')}
+                    >
+                        <Text style={{ color: COLORS.primary }}>Back to Home</Text>
+                    </TouchableOpacity>
+                </View>
+
+                {/* Floating SOS access */}
+                <View style={[styles.topControls, { right: 16 }]}> 
+                    <TouchableOpacity
+                        style={styles.mapControlButton}
+                        onPress={() => router.push('/(tabs)/sos')}
+                    >
+                        <Ionicons name="warning" size={20} color={COLORS.primary} />
+                    </TouchableOpacity>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
     const travelInfo = getTravelInfo();
     const currentStep = getCurrentStep();
 
@@ -620,6 +662,14 @@ export default function RoutingScreen() {
 
                     <TouchableOpacity style={styles.mapControlButton} onPress={recalculateRoute}>
                         <Ionicons name="refresh" size={20} color={COLORS.primary} />
+                    </TouchableOpacity>
+
+                    {/* Persistent SOS button */}
+                    <TouchableOpacity
+                        style={styles.mapControlButton}
+                        onPress={() => router.push('/(tabs)/sos')}
+                    >
+                        <Ionicons name="warning" size={20} color={COLORS.primary} />
                     </TouchableOpacity>
                 </View>
 

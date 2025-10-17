@@ -2,6 +2,7 @@
   "name": "ev-ecosystem-mobile-application",
   "main": "expo-router/entry",
   "version": "1.0.0",
+  "type": "module",
   "scripts": {
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
@@ -36,7 +37,7 @@
     "expo-symbols": "~1.0.7",
     "expo-system-ui": "~6.0.7",
     "expo-web-browser": "~15.0.8",
-    "firebase": "^12.3.0",
+    "firebase": "^12.4.0",
     "lucide-react-native": "^0.545.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
@@ -59,6 +60,7 @@
     "@types/react-native-onboarding-swiper": "^1.1.9",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
+    "ts-node": "^10.9.2",
     "typescript": "~5.9.2"
   },
   "private": true

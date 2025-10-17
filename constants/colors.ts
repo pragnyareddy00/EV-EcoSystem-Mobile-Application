@@ -1,4 +1,24 @@
 // constants/colors.ts
+
+// Utility function to add opacity to hex colors
+export const withOpacity = (color: string, opacity: number): string => {
+  // Ensure opacity is between 0 and 1
+  const clampedOpacity = Math.max(0, Math.min(1, opacity));
+
+  // Convert opacity to hex (0-255)
+  const alpha = Math.round(clampedOpacity * 255).toString(16).padStart(2, '0');
+
+  // If color already has alpha, replace it; otherwise, append it
+  if (color.length === 9) { // #RRGGBBAA
+    return color.slice(0, 7) + alpha;
+  } else if (color.length === 7) { // #RRGGBB
+    return color + alpha;
+  } else {
+    // Fallback: assume it's a valid color and append alpha
+    return color + alpha;
+  }
+};
+
 export const COLORS = {
   // Primary brand colors - Updated theme
   primary: '#2E86AB',        // Electric blue as primary
@@ -96,6 +116,17 @@ export const COLORS = {
   transparent: 'transparent',
   gray: '#6C757D',             // Standard gray
   lightGray: '#E9ECEF',        // Light gray
+
+  // Neutral colors for backgrounds and subtle elements
+  neutral50: '#F8F9FA',        // Very light neutral
+  neutral100: '#E9ECEF',       // Light neutral (for buttons, etc.)
+  neutral200: '#DEE2E6',       // Medium light neutral
+  neutral300: '#ADB5BD',       // Medium neutral
+  neutral400: '#6C757D',       // Dark neutral
+  neutral500: '#495057',       // Darker neutral
+  neutral600: '#343A40',       // Very dark neutral
+  neutral700: '#212529',       // Almost black neutral
+  neutral800: '#000000',       // Black neutral
   
   // Gradient colors for modern effects
   gradientPrimary: ['#2E86AB', '#1B4332'], // Electric to forest
@@ -130,13 +161,13 @@ export const FONTS = {
   
   // Font weights (for when custom fonts are used)
   weights: {
-    light: '300',
-    regular: '400',
-    medium: '500',
-    semibold: '600',
-    bold: '700',
-    extrabold: '800',
-  },
+    light: "300",
+    regular: "400",
+    medium: "500",
+    semibold: "600",
+    bold: "700",
+    extrabold: "800",
+  } as const,
   
   // Font sizes with consistent scale
   sizes: {
@@ -244,7 +275,7 @@ export const BREAKPOINTS = {
 };
 
 // Shadow configurations
-export const SHADOWS = {
+const _SHADOWS = {
   small: {
     shadowColor: '#000',
     shadowOffset: {
@@ -276,6 +307,14 @@ export const SHADOWS = {
     elevation: 8,
   },
 };
+
+// Export shadows with shorthand aliases included in the type
+export const SHADOWS = {
+  ..._SHADOWS,
+  sm: _SHADOWS.small,
+  md: _SHADOWS.medium,
+  lg: _SHADOWS.large,
+} as const;
 
 // EV-specific constants
 export const EV_CONSTANTS = {
