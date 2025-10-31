@@ -1,15 +1,13 @@
 import { useRouter } from 'expo-router';
 import {
   Car,
-  ChevronRight,
-  CreditCard,
-  History,
-  Leaf,
+  ChevronRight, // New Icon
+  Edit,
   LogOut,
   MapPin,
+  MapPinPlus,
   Settings,
   User,
-  Zap
 } from 'lucide-react-native';
 import React from 'react';
 import {
@@ -21,7 +19,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Card } from '../../components/Card'; // Use our new Card component
+import { Card } from '../../components/Card';
 import { COLORS, FONTS, SPACING } from '../../constants/colors';
 import { useAuth } from '../../context/AuthContext';
 
@@ -30,15 +28,25 @@ export default function ProfileScreen() {
   const { userProfile, onLogout } = useAuth();
 
   const handleMenuPress = (item: string) => {
-    Alert.alert('Coming Soon', `${item} feature will be available soon!`);
+    // Navigate to the correct screen based on the title
+    if (item === 'My Vehicle') {
+      router.push('/profile/my-vehicle');
+    } else if (item === 'App Settings') {
+      router.push('/profile/app-settings');
+    } else if (item === 'Contribute a Station') {
+      router.push('/profile/contribute-station');
+    } else {
+      Alert.alert('Coming Soon', `${item} feature will be available soon!`);
+    }
   };
 
+  // --- UPDATED MENU ---
+  // "Favorite Stations" is now handled by the 'handleMenuPress' Alert.
   const menuItems = [
-    { icon: Car, title: 'My Vehicle', subtitle: 'Manage your EV details' },
-    { icon: MapPin, title: 'Favorite Stations', subtitle: 'Your saved charging locations' },
-    { icon: History, title: 'Trip History', subtitle: 'View all your journeys' },
-    { icon: CreditCard, title: 'Payment Methods', subtitle: 'Cards and billing info' },
-    { icon: Settings, title: 'App Settings', subtitle: 'Notifications and preferences' },
+    { name: 'my-vehicle', icon: Car, title: 'My Vehicle', subtitle: 'Manage your EV details' },
+    { name: 'favorites', icon: MapPin, title: 'Favorite Stations', subtitle: 'Your saved charging locations' },
+    { name: 'app-settings', icon: Settings, title: 'App Settings', subtitle: 'Theme and notifications' },
+    { name: 'contribute', icon: MapPinPlus, title: 'Contribute a Station', subtitle: 'Help grow the network' },
   ];
 
   return (
@@ -60,6 +68,12 @@ export default function ProfileScreen() {
               <Text style={styles.userEmail}>{userProfile?.email}</Text>
               <Text style={styles.userPhone}>{userProfile?.phoneNumber}</Text>
             </View>
+            <TouchableOpacity
+              style={styles.editButton}
+              onPress={() => router.push('/profile/edit-profile')}
+            >
+              <Edit size={16} color={COLORS.primary} />
+            </TouchableOpacity>
           </View>
         </Card>
 
@@ -88,39 +102,12 @@ export default function ProfileScreen() {
             </Card>
         )}
 
-        {/* Driving Stats */}
-        <Card style={styles.card}>
-          <Text style={styles.cardTitle}>Driving Statistics</Text>
-          <View style={styles.statsGrid}>
-            <View style={styles.statBox}>
-              <MapPin size={20} color={COLORS.primary} />
-              <Text style={styles.statBoxValue}>0</Text>
-              <Text style={styles.statBoxLabel}>km Driven</Text>
-            </View>
-            <View style={styles.statBox}>
-              <Zap size={20} color="#f59e0b" />
-              <Text style={styles.statBoxValue}>0</Text>
-              <Text style={styles.statBoxLabel}>kWh Used</Text>
-            </View>
-            <View style={styles.statBox}>
-              <CreditCard size={20} color="#10b981" />
-              <Text style={styles.statBoxValue}>₹0</Text>
-              <Text style={styles.statBoxLabel}>Total Cost</Text>
-            </View>
-            <View style={styles.statBox}>
-              <Leaf size={20} color="#10b981" />
-              <Text style={styles.statBoxValue}>N/A</Text>
-              <Text style={styles.statBoxLabel}>Eco Score</Text>
-            </View>
-          </View>
-        </Card>
-
         {/* Menu Items */}
         <Card style={styles.card}>
           <Text style={styles.cardTitle}>Settings & Preferences</Text>
           <View style={styles.menu}>
-            {menuItems.map((item, index) => (
-              <TouchableOpacity key={index} style={styles.menuItem} onPress={() => handleMenuPress(item.title)}>
+            {menuItems.map((item) => (
+              <TouchableOpacity key={item.name} style={styles.menuItem} onPress={() => handleMenuPress(item.title)}>
                 <View style={styles.menuItemLeft}>
                   <View style={styles.menuIcon}>
                     <item.icon size={20} color={COLORS.primary} />
@@ -130,21 +117,21 @@ export default function ProfileScreen() {
                     <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
                   </View>
                 </View>
-                <ChevronRight size={20} color="#94a3b8" />
+                <ChevronRight size={20} color={COLORS.textMuted} />
               </TouchableOpacity>
             ))}
             {/* Logout Button */}
             <TouchableOpacity style={styles.menuItem} onPress={onLogout}>
                 <View style={styles.menuItemLeft}>
-                  <View style={[styles.menuIcon, { backgroundColor: '#fee2e2'}]}>
-                    <LogOut size={20} color="#ef4444" />
+                  <View style={[styles.menuIcon, { backgroundColor: COLORS.errorLight }]}>
+                    <LogOut size={20} color={COLORS.error} />
                   </View>
                   <View style={styles.menuContent}>
-                    <Text style={[styles.menuTitle, { color: '#ef4444'}]}>Log Out</Text>
+                    <Text style={[styles.menuTitle, { color: COLORS.error }]}>Log Out</Text>
                     <Text style={styles.menuSubtitle}>Sign out of your account</Text>
                   </View>
                 </View>
-                <ChevronRight size={20} color="#94a3b8" />
+                <ChevronRight size={20} color={COLORS.textMuted} />
               </TouchableOpacity>
           </View>
         </Card>
@@ -162,18 +149,18 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: COLORS.background,
   },
   header: {
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
-    backgroundColor: '#ffffff',
+    backgroundColor: COLORS.backgroundCard,
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: COLORS.border,
   },
   title: {
     fontSize: FONTS.sizes.xxl,
-    fontWeight: 'bold',
+    fontWeight: FONTS.weights.bold,
     color: COLORS.textPrimary,
   },
   card: {
@@ -188,7 +175,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: COLORS.neutral100,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: SPACING.md,
@@ -198,22 +185,32 @@ const styles = StyleSheet.create({
   },
   userName: {
     fontSize: FONTS.sizes.lg,
-    fontWeight: 'bold',
+    fontWeight: FONTS.weights.bold,
     color: COLORS.textPrimary,
   },
   userEmail: {
     fontSize: FONTS.sizes.sm,
-    color: '#64748b',
+    color: COLORS.textSecondary,
     marginTop: 2,
   },
   userPhone: {
     fontSize: FONTS.sizes.sm,
-    color: '#64748b',
+    color: COLORS.textSecondary,
     marginTop: 2,
+  },
+  editButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.neutral100,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
   cardTitle: {
     fontSize: FONTS.sizes.md,
-    fontWeight: 'bold',
+    fontWeight: FONTS.weights.bold,
     color: COLORS.textPrimary,
     marginBottom: SPACING.md,
   },
@@ -228,7 +225,7 @@ const styles = StyleSheet.create({
   },
   vehicleName: {
     fontSize: FONTS.sizes.base,
-    fontWeight: '600',
+    fontWeight: FONTS.weights.semibold,
     color: COLORS.textPrimary,
   },
   vehicleStats: {
@@ -236,46 +233,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     paddingTop: SPACING.md,
     borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
+    borderTopColor: COLORS.neutral100,
   },
   vehicleStat: {
     alignItems: 'center',
   },
   statValue: {
     fontSize: FONTS.sizes.lg,
-    fontWeight: 'bold',
+    fontWeight: FONTS.weights.bold,
     color: COLORS.primary,
   },
   statLabel: {
     fontSize: FONTS.sizes.xs,
-    color: '#64748b',
+    color: COLORS.textSecondary,
     marginTop: 2,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: SPACING.sm,
-  },
-  statBox: {
-    flex: 1,
-    minWidth: '45%',
-    alignItems: 'center',
-    padding: SPACING.md,
-    backgroundColor: '#f8fafc',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  statBoxValue: {
-    fontSize: FONTS.sizes.lg,
-    fontWeight: 'bold',
-    color: COLORS.textPrimary,
-    marginTop: 8,
-  },
-  statBoxLabel: {
-    fontSize: FONTS.sizes.xs,
-    color: '#64748b',
-    marginTop: 4,
   },
   menu: {
     gap: 4,
@@ -286,7 +257,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    borderBottomColor: COLORS.neutral100,
   },
   menuItemLeft: {
     flexDirection: 'row',
@@ -297,7 +268,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: COLORS.neutral100,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: SPACING.md,
@@ -307,12 +278,12 @@ const styles = StyleSheet.create({
   },
   menuTitle: {
     fontSize: FONTS.sizes.base,
-    fontWeight: '600',
+    fontWeight: FONTS.weights.semibold,
     color: COLORS.textPrimary,
   },
   menuSubtitle: {
     fontSize: FONTS.sizes.sm,
-    color: '#64748b',
+    color: COLORS.textSecondary,
     marginTop: 2,
   },
   footer: {
@@ -322,6 +293,7 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: FONTS.sizes.xs,
-    color: '#94a3b8',
+    color: COLORS.textMuted,
   },
 });
+
