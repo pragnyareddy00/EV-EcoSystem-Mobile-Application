@@ -2,30 +2,107 @@
 
 import { Route } from '../types/navigation';
 
-const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || ''; // Replace with your actual API key
+const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
+
+export interface DirectionsError {
+  type: 'network' | 'api_key' | 'quota' | 'not_found' | 'unknown';
+  message: string;
+  retryable: boolean;
+}
 
 export class NavigationService {
   /**
+   * Validate API key configuration
+   */
+  static validateApiKey(): boolean {
+    return GOOGLE_MAPS_API_KEY.length > 0;
+  }
+
+  /**
+   * Get user-friendly error message based on API response
+   */
+  static getDirectionsError(status: string, errorMessage?: string): DirectionsError {
+    switch (status) {
+      case 'REQUEST_DENIED':
+        return {
+          type: 'api_key',
+          message: 'Google Maps API key is invalid or missing. Please check your configuration.',
+          retryable: false
+        };
+      case 'OVER_QUERY_LIMIT':
+        return {
+          type: 'quota',
+          message: 'Daily API quota exceeded. Please try again later.',
+          retryable: true
+        };
+      case 'NOT_FOUND':
+      case 'ZERO_RESULTS':
+        return {
+          type: 'not_found',
+          message: 'No route found between the selected locations.',
+          retryable: false
+        };
+      case 'UNKNOWN_ERROR':
+        return {
+          type: 'unknown',
+          message: 'Unknown error occurred. Please try again.',
+          retryable: true
+        };
+      default:
+        return {
+          type: 'api_key',
+          message: errorMessage || 'Unable to calculate route. Please check your internet connection.',
+          retryable: true
+        };
+    }
+  }
+
+  /**
    * Get directions from origin to destination using Google Directions API
    */
-  static async getDirections(origin: string, destination: string): Promise<Route | null> {
+  static async getDirections(origin: string, destination: string): Promise<{ route: Route | null; error?: DirectionsError }> {
     try {
+      // Validate API key first
+      if (!this.validateApiKey()) {
+        return {
+          route: null,
+          error: {
+            type: 'api_key',
+            message: 'Google Maps API key is not configured. Please contact support.',
+            retryable: false
+          }
+        };
+      }
+
       const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${encodeURIComponent(
         origin
       )}&destination=${encodeURIComponent(destination)}&key=${GOOGLE_MAPS_API_KEY}`;
 
       const response = await fetch(url);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
       const data = await response.json();
 
       if (data.status === 'OK' && data.routes.length > 0) {
-        return data.routes[0];
+        return { route: data.routes[0] };
       }
 
+      const error = this.getDirectionsError(data.status, data.error_message);
       console.error('Directions API error:', data.status, data.error_message);
-      return null;
+      return { route: null, error };
     } catch (error) {
       console.error('Error fetching directions:', error);
-      return null;
+      return {
+        route: null,
+        error: {
+          type: 'network',
+          message: 'Network error. Please check your internet connection and try again.',
+          retryable: true
+        }
+      };
     }
   }
 
@@ -215,6 +292,80 @@ export class NavigationService {
   }
 
   /**
+   * Get directions with retry mechanism
+   */
+  static async getDirectionsWithRetry(
+    origin: string,
+    destination: string,
+    maxRetries: number = 3,
+    retryDelay: number = 1000
+  ): Promise<{ route: Route | null; error?: DirectionsError }> {
+    let lastError: DirectionsError | undefined;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      const result = await this.getDirections(origin, destination);
+      
+      if (result.route) {
+        return result;
+      }
+      
+      lastError = result.error;
+      
+      // Don't retry if error is not retryable
+      if (result.error && !result.error.retryable) {
+        break;
+      }
+      
+      // Don't delay on last attempt
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, retryDelay * attempt));
+      }
+    }
+    
+    return { route: null, error: lastError };
+  }
+
+  /**
+   * Validate coordinate values
+   */
+  static isValidCoordinate(coordinate: { latitude: number; longitude: number }): boolean {
+    return (
+      !isNaN(coordinate.latitude) &&
+      !isNaN(coordinate.longitude) &&
+      coordinate.latitude >= -90 &&
+      coordinate.latitude <= 90 &&
+      coordinate.longitude >= -180 &&
+      coordinate.longitude <= 180
+    );
+  }
+
+  /**
+   * Optimize route coordinates by removing redundant points
+   */
+  static optimizeRouteCoordinates(
+    coordinates: Array<{ latitude: number; longitude: number }>,
+    tolerance: number = 10
+  ): Array<{ latitude: number; longitude: number }> {
+    if (coordinates.length <= 2) return coordinates;
+
+    const optimized = [coordinates[0]];
+    
+    for (let i = 1; i < coordinates.length - 1; i++) {
+      const current = coordinates[i];
+      const last = optimized[optimized.length - 1];
+      
+      if (this.calculateDistance(current, last) >= tolerance) {
+        optimized.push(current);
+      }
+    }
+    
+    // Always include the last point
+    optimized.push(coordinates[coordinates.length - 1]);
+    
+    return optimized;
+  }
+
+  /**
    * Check if user is off route
    */
   static isOffRoute(
@@ -234,5 +385,28 @@ export class NavigationService {
     }
 
     return minDistance > thresholdMeters;
+  }
+
+  /**
+   * Get progress along route (0-100%)
+   */
+  static getRouteProgress(
+    currentLocation: { latitude: number; longitude: number },
+    routeCoordinates: Array<{ latitude: number; longitude: number }>
+  ): number {
+    if (routeCoordinates.length === 0) return 0;
+
+    let closestIndex = 0;
+    let minDistance = Infinity;
+
+    for (let i = 0; i < routeCoordinates.length; i++) {
+      const distance = this.calculateDistance(currentLocation, routeCoordinates[i]);
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestIndex = i;
+      }
+    }
+
+    return Math.min(100, (closestIndex / (routeCoordinates.length - 1)) * 100);
   }
 }

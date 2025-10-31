@@ -1,6 +1,19 @@
+/**
+ * Professional Admin Dashboard
+ * 
+ * This component implements the professional admin role for EV station owners.
+ * Features:
+ * - Station Management: Add, edit, view, and delete owned stations
+ * - Station Analytics: View station statistics and status
+ * - Role-based Access: Only accessible to users with 'admin' role
+ * 
+ * Note: User Management has been deprecated as per the new requirements
+ * to focus on station-centric functionalities for professional admins.
+ */
+
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { collection, deleteDoc, doc, getDocs, updateDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDocs } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import { Alert, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { COLORS } from '../../constants/colors';
@@ -10,17 +23,8 @@ import { db } from '../../services/firebase';
 
 type SortBy = 'name' | 'status' | 'power';
 type SortOrder = 'asc' | 'desc';
-type UserSortBy = 'name' | 'email' | 'role';
 
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: 'admin' | 'user';
-  createdAt?: any;
-}
-
-// Mock users data - removed as we're fetching real data from Firebase
+// User interface removed as User Management is deprecated
 
 export default function AdminScreen() {
   const [stations, setStations] = useState<Station[]>([]);
@@ -32,16 +36,6 @@ export default function AdminScreen() {
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
   const [stationPage, setStationPage] = useState(1);
   const stationsPerPage = 4;
-  
-  // User management state
-  const [users, setUsers] = useState<User[]>([]);
-  const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
-  const [userSearchQuery, setUserSearchQuery] = useState('');
-  const [userRoleFilter, setUserRoleFilter] = useState<'all' | 'admin' | 'user'>('all');
-  const [userSortBy, setUserSortBy] = useState<UserSortBy>('name');
-  const [userSortOrder, setUserSortOrder] = useState<SortOrder>('asc');
-  const [userPage, setUserPage] = useState(1);
-  const usersPerPage = 4;
   
   const { userProfile } = useAuth();
 
@@ -55,7 +49,6 @@ export default function AdminScreen() {
 
   useEffect(() => {
     loadStations();
-    loadUsers();
   }, []);
 
   useEffect(() => {
@@ -87,35 +80,6 @@ export default function AdminScreen() {
     setStationPage(1);
   }, [searchQuery, stations, statusFilter, sortBy, sortOrder]);
 
-  useEffect(() => {
-    if (!users) {
-      setFilteredUsers([]);
-      return;
-    }
-
-    let filtered = users.filter(user => {
-      if (!user) return false;
-      
-      const matchesSearch = 
-        (user.name?.toLowerCase() || '').includes(userSearchQuery?.toLowerCase() || '') ||
-        (user.email?.toLowerCase() || '').includes(userSearchQuery?.toLowerCase() || '');
-      const matchesRole = userRoleFilter === 'all' || user.role === userRoleFilter;
-      return matchesSearch && matchesRole;
-    });
-
-    filtered.sort((a, b) => {
-      let compareA = String(a[userSortBy] || '').toLowerCase();
-      let compareB = String(b[userSortBy] || '').toLowerCase();
-      
-      if (compareA < compareB) return userSortOrder === 'asc' ? -1 : 1;
-      if (compareA > compareB) return userSortOrder === 'asc' ? 1 : -1;
-      return 0;
-    });
-
-    setFilteredUsers(filtered);
-    setUserPage(1);
-  }, [userSearchQuery, users, userRoleFilter, userSortBy, userSortOrder]);
-
   const loadStations = async () => {
     try {
       const stationsSnapshot = await getDocs(collection(db, 'stations'));
@@ -131,24 +95,9 @@ export default function AdminScreen() {
     }
   };
 
-  const loadUsers = async () => {
-    try {
-      const usersSnapshot = await getDocs(collection(db, 'users'));
-      const usersData = usersSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as User[];
-      setUsers(usersData || []); // Ensure we always set an array
-    } catch (error) {
-      console.error('Error loading users:', error);
-      Alert.alert('Error', 'Failed to load users');
-      setUsers([]); // Set empty array on error
-    }
-  };
-
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
-    Promise.all([loadStations(), loadUsers()]).finally(() => setRefreshing(false));
+    loadStations().finally(() => setRefreshing(false));
   }, []);
 
   const handleDeleteStation = async (stationId: string) => {
@@ -177,63 +126,6 @@ export default function AdminScreen() {
     );
   };
 
-  const handleToggleUserRole = async (userId: string, currentRole: string) => {
-    const newRole = currentRole === 'admin' ? 'user' : 'admin';
-    Alert.alert(
-      `${newRole === 'admin' ? 'Promote' : 'Demote'} User`,
-      `Are you sure you want to ${newRole === 'admin' ? 'promote this user to admin' : 'demote this admin to user'}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Confirm',
-          onPress: async () => {
-            try {
-              const userRef = doc(db, 'users', userId);
-              await updateDoc(userRef, {
-                role: newRole
-              });
-              setUsers(users.map(user => 
-                user.id === userId ? { ...user, role: newRole as 'admin' | 'user' } : user
-              ));
-              Alert.alert('Success', `User ${newRole === 'admin' ? 'promoted' : 'demoted'} successfully`);
-            } catch (error) {
-              console.error('Error updating user role:', error);
-              Alert.alert('Error', 'Failed to update user role');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleDeleteUser = async (userId: string) => {
-    Alert.alert(
-      'Delete User',
-      'Are you sure you want to delete this user? This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteDoc(doc(db, 'users', userId));
-              setUsers(users.filter(user => user.id !== userId));
-              Alert.alert('Success', 'User deleted successfully');
-            } catch (error) {
-              console.error('Error deleting user:', error);
-              Alert.alert('Error', 'Failed to delete user');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  if (userProfile?.role !== 'admin') {
-    return null;
-  }
-
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
       case 'available':
@@ -248,8 +140,12 @@ export default function AdminScreen() {
   };
 
   const availableStations = stations.filter(s => s.status === 'available').length;
-  const totalUsers = users.length;
-  const adminUsers = users.filter(u => u.role === 'admin').length;
+  const busyStations = stations.filter(s => s.status === 'busy').length;
+  const offlineStations = stations.filter(s => s.status === 'offline').length;
+
+  if (userProfile?.role !== 'admin') {
+    return null;
+  }
 
   return (
     <View style={styles.container}>
@@ -263,8 +159,8 @@ export default function AdminScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.headerTitle}>Admin Dashboard</Text>
-            <Text style={styles.headerSubtitle}>Manage stations and users</Text>
+            <Text style={styles.headerTitle}>Station Owner Dashboard</Text>
+            <Text style={styles.headerSubtitle}>Manage your EV charging stations</Text>
           </View>
         </View>
 
@@ -291,22 +187,22 @@ export default function AdminScreen() {
           </View>
 
           <View style={styles.statCard}>
-            <View style={[styles.statIconContainer, { backgroundColor: '#F3E5F5' }]}>
-              <Ionicons name="people" size={24} color="#9C27B0" />
+            <View style={[styles.statIconContainer, { backgroundColor: '#FFF3E0' }]}>
+              <Ionicons name="time" size={24} color="#FF9800" />
             </View>
             <View style={styles.statContent}>
-              <Text style={styles.statValue}>{totalUsers}</Text>
-              <Text style={styles.statLabel}>Total Users</Text>
+              <Text style={styles.statValue}>{busyStations}</Text>
+              <Text style={styles.statLabel}>Busy</Text>
             </View>
           </View>
 
           <View style={styles.statCard}>
-            <View style={[styles.statIconContainer, { backgroundColor: '#E0F2F1' }]}>
-              <Ionicons name="shield-checkmark" size={24} color="#009688" />
+            <View style={[styles.statIconContainer, { backgroundColor: '#FFEBEE' }]}>
+              <Ionicons name="close-circle" size={24} color="#F44336" />
             </View>
             <View style={styles.statContent}>
-              <Text style={styles.statValue}>{adminUsers}</Text>
-              <Text style={styles.statLabel}>Admins</Text>
+              <Text style={styles.statValue}>{offlineStations}</Text>
+              <Text style={styles.statLabel}>Offline</Text>
             </View>
           </View>
         </View>
@@ -315,15 +211,15 @@ export default function AdminScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <View>
-              <Text style={styles.sectionTitle}>Station Management</Text>
-              <Text style={styles.sectionSubtitle}>{filteredStations.length} stations</Text>
+              <Text style={styles.sectionTitle}>My Charging Stations</Text>
+              <Text style={styles.sectionSubtitle}>{filteredStations.length} stations registered</Text>
             </View>
             <TouchableOpacity
               style={styles.addButton}
               onPress={() => router.push('/addStation' as any)}
             >
               <Ionicons name="add" size={20} color={COLORS.white} />
-              <Text style={styles.addButtonText}>Add Station</Text>
+              <Text style={styles.addButtonText}>Register Station</Text>
             </TouchableOpacity>
           </View>
 
@@ -448,149 +344,6 @@ export default function AdminScreen() {
                   Math.min(Math.ceil(filteredStations.length / stationsPerPage), p + 1)
                 )}
                 disabled={stationPage >= Math.ceil(filteredStations.length / stationsPerPage)}
-              >
-                <Ionicons name="chevron-forward" size={20} color={COLORS.white} />
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-
-        {/* User Management Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View>
-              <Text style={styles.sectionTitle}>User Management</Text>
-              <Text style={styles.sectionSubtitle}>{filteredUsers.length} users</Text>
-            </View>
-          </View>
-
-          {/* User Search & Filters */}
-          <View style={styles.searchContainer}>
-            <View style={styles.searchInputContainer}>
-              <Ionicons name="search" size={20} color={COLORS.textMuted} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search users..."
-                value={userSearchQuery}
-                onChangeText={setUserSearchQuery}
-                placeholderTextColor={COLORS.textMuted}
-              />
-            </View>
-          </View>
-
-          <View style={styles.filterRow}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <TouchableOpacity
-                style={[styles.filterChip, userRoleFilter === 'all' && styles.filterChipActive]}
-                onPress={() => setUserRoleFilter('all')}
-              >
-                <Text style={[styles.filterChipText, userRoleFilter === 'all' && styles.filterChipTextActive]}>All Users</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.filterChip, userRoleFilter === 'admin' && styles.filterChipActive]}
-                onPress={() => setUserRoleFilter('admin')}
-              >
-                <Ionicons name="shield-checkmark" size={14} color={userRoleFilter === 'admin' ? COLORS.white : COLORS.textMuted} />
-                <Text style={[styles.filterChipText, userRoleFilter === 'admin' && styles.filterChipTextActive]}>Admins</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.filterChip, userRoleFilter === 'user' && styles.filterChipActive]}
-                onPress={() => setUserRoleFilter('user')}
-              >
-                <Ionicons name="person" size={14} color={userRoleFilter === 'user' ? COLORS.white : COLORS.textMuted} />
-                <Text style={[styles.filterChipText, userRoleFilter === 'user' && styles.filterChipTextActive]}>Regular Users</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-
-          {/* User Cards */}
-          <View style={styles.cardsContainer}>
-            {filteredUsers
-              .slice((userPage - 1) * usersPerPage, userPage * usersPerPage)
-              .map((user) => (
-              <View key={user.id} style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <View style={styles.userCardHeader}>
-                    <View style={styles.userAvatar}>
-                      <Text style={styles.userAvatarText}>
-                        {user.name ? user.name.charAt(0).toUpperCase() : '?'}
-                      </Text>
-                    </View>
-                    <View style={styles.userInfo}>
-                      <View style={styles.userNameRow}>
-                        <Text style={styles.cardTitle}>{user.name || 'Unknown User'}</Text>
-                        {user.role === 'admin' && (
-                          <View style={styles.adminBadge}>
-                            <Ionicons name="shield-checkmark" size={12} color={COLORS.primary} />
-                            <Text style={styles.adminBadgeText}>Admin</Text>
-                          </View>
-                        )}
-                      </View>
-                      <Text style={styles.cardSubtitle}>{user.email || 'No email'}</Text>
-                    </View>
-                  </View>
-                </View>
-                
-                <View style={styles.cardBody}>
-                  <View style={styles.cardInfo}>
-                    <Ionicons name="calendar-outline" size={16} color={COLORS.textMuted} />
-                    <Text style={styles.cardInfoText}>
-                      Joined {user.createdAt ? new Date(user.createdAt.toDate()).toLocaleDateString() : 'N/A'}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.cardActions}>
-                  <TouchableOpacity
-                    style={styles.cardActionButton}
-                    onPress={() => handleToggleUserRole(user.id, user.role)}
-                  >
-                    <Ionicons 
-                      name={user.role === 'admin' ? 'arrow-down-outline' : 'arrow-up-outline'} 
-                      size={18} 
-                      color={COLORS.primary} 
-                    />
-                    <Text style={styles.cardActionText}>
-                      {user.role === 'admin' ? 'Demote' : 'Promote'}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.cardActionButton, styles.cardActionButtonDanger]}
-                    onPress={() => handleDeleteUser(user.id)}
-                  >
-                    <Ionicons name="trash-outline" size={18} color={COLORS.error} />
-                    <Text style={[styles.cardActionText, styles.cardActionTextDanger]}>Delete</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))}
-          </View>
-
-          {/* User Pagination */}
-          {filteredUsers.length > usersPerPage && (
-            <View style={styles.pagination}>
-              <TouchableOpacity
-                style={[styles.paginationButton, userPage === 1 && styles.paginationButtonDisabled]}
-                onPress={() => setUserPage(p => Math.max(1, p - 1))}
-                disabled={userPage === 1}
-              >
-                <Ionicons name="chevron-back" size={20} color={COLORS.white} />
-              </TouchableOpacity>
-              
-              <Text style={styles.paginationText}>
-                Page {userPage} of {Math.ceil(filteredUsers.length / usersPerPage)}
-              </Text>
-
-              <TouchableOpacity
-                style={[
-                  styles.paginationButton,
-                  userPage >= Math.ceil(filteredUsers.length / usersPerPage) && 
-                  styles.paginationButtonDisabled
-                ]}
-                onPress={() => setUserPage(p => 
-                  Math.min(Math.ceil(filteredUsers.length / usersPerPage), p + 1)
-                )}
-                disabled={userPage >= Math.ceil(filteredUsers.length / usersPerPage)}
               >
                 <Ionicons name="chevron-forward" size={20} color={COLORS.white} />
               </TouchableOpacity>

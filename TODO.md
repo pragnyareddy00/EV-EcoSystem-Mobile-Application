@@ -1,9 +1,8 @@
-# TODO: Fix TypeScript Errors in Style Properties
+# TODO: Fix Navigation Routes in Profile Screen
 
-## Tasks
-- [ ] Add `withOpacity` utility function to `constants/colors.ts`
-- [ ] Update `app/(tabs)/sos.tsx` to import and use `withOpacity` for color opacity
-- [ ] Replace `COLORS.primary + '20'` with `withOpacity(COLORS.primary, 0.2)` in styles
-- [ ] Run TypeScript check to verify errors are resolved
-- [ ] Test the app to ensure styles render correctly
-- [ ] Check other open files for similar issues and fix if found
+## Steps to Complete:
+- [x] Update navigation paths in app/(tabs)/profile.tsx to use correct relative paths
+- [x] Change `./profile/my-vehicle` to `./my-vehicle`
+- [x] Change `./profile/app-settings` to `./app-settings`
+- [x] Change `./profile/contribute-station` to `./contribute-station`
+- [x] Change `./profile/edit-profile` to `./edit-profile`

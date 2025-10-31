@@ -1,53 +1,75 @@
-// In app/_layout.tsx
-import { Slot, useRouter, useSegments } from 'expo-router';
-import React, { useEffect } from 'react';
+import { Stack, useRouter, useSegments } from 'expo-router';
+import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
-// Import AuthProvider and useAuth from their correct paths
+import { COLORS } from '../constants/colors';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 
-const InitialLayout = () => {
-  const { user, isLoading } = useAuth();
-  const segments = useSegments();
+// This is the "smarter" navigation logic that fixes the redirect bug
+function RootLayoutNav() {
+  // --- THIS IS THE FIX ---
+  // We destructure the properties directly from useAuth(), not from a nested 'authState' object.
+  const { user, userProfile, isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
+  const segments = useSegments(); // Gets the current path, e.g., ['(tabs)', 'home']
 
   useEffect(() => {
-    // If loading, don't do anything yet
-    if (isLoading) return;
+    if (isLoading) return; // Wait until auth state is known
 
     const inAuthGroup = segments[0] === '(auth)';
+    const inAppGroup = segments[0] === '(tabs)' || segments[0] === 'profile';
 
-    if (!user && !inAuthGroup) {
-      // If the user is not signed in and the initial segment is not '(auth)',
-      // redirect them to the login page.
-      router.replace('/(auth)/login');
-    } else if (user && !user.emailVerified && !inAuthGroup) {
-      // If the user is signed in but email not verified, and not in auth group,
-      // redirect to verify email.
-      router.replace('/(auth)/verify-email');
-    } else if (user && user.emailVerified && inAuthGroup) {
-      // If the user is signed in, email verified, and in auth group,
-      // redirect them to the home page.
-      router.replace('/(tabs)/home');
+    // --- UPDATED LOGIC ---
+    // Check if user is fully logged in and verified
+    if (isAuthenticated && userProfile) {
+      // If they are authenticated but still on an auth screen, send them to home.
+      if (inAuthGroup) {
+        router.replace('/(tabs)/home');
+      }
+    } 
+    // Check if user is logged in but needs to verify email
+    else if (user && !user.emailVerified) {
+      // If they are not on the verification screen, send them there.
+      if (segments[1] !== 'verify-email') {
+        router.replace('/(auth)/verify-email');
+      }
+    } 
+    // User is not logged in at all
+    else if (!user) {
+      // If they are anywhere inside the app, send them to login.
+      if (inAppGroup) {
+        router.replace('/(auth)/login');
+      }
     }
-  }, [user, isLoading, segments]);
+  }, [isAuthenticated, user, userProfile, isLoading, segments]); // Re-run when any of these change
 
-  // While checking for user, show a loading screen
   if (isLoading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background }}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
       </View>
     );
   }
 
-  // Render the current screen
-  return <Slot />;
-};
+  // This <Stack> navigator is the correct setup for your app
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="(auth)" />
+      <Stack.Screen 
+        name="profile" 
+        options={{ 
+          presentation: 'modal', 
+        }} 
+      />
+    </Stack>
+  );
+}
 
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <InitialLayout />
+      <RootLayoutNav />
     </AuthProvider>
   );
 }
+
