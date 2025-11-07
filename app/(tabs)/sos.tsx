@@ -1,3 +1,4 @@
+// app/(tabs)/sos.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import * as ExpoLocation from 'expo-location';
@@ -14,9 +15,11 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
 } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
+// --- NEW IMPORT ---
+import { ProviderDetailSheet } from '../../components/ProviderDetailSheet';
 import { COLORS, FONTS, RADIUS, SHADOWS, SPACING } from '../../constants/colors';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../services/firebase';
@@ -27,9 +30,9 @@ const logger = {
     console.info(`[SOS] ${message}`, {
       ...metadata,
       timestamp: new Date().toISOString(),
-      userId: metadata.userId || 'unknown'
+      userId: metadata.userId || 'unknown',
     });
-  }
+  },
 };
 
 // --- Type Definitions ---
@@ -37,6 +40,7 @@ type SosStage = 'assessment' | 'options' | 'tracking' | 'confirmation';
 type ProblemType = 'battery_drained' | 'battery_low' | 'breakdown' | 'accident' | 'other';
 type ServiceType = 'charging' | 'towing' | 'repair';
 
+// --- MODIFIED: Added distance and pricing ---
 interface Provider {
   id: string;
   name: string;
@@ -45,25 +49,58 @@ interface Provider {
   etaMinutes: number;
   phone: string;
   location: { latitude: number; longitude: number };
+  pricing?: string; // NEW
+  distance?: number; // NEW
 }
+
+// --- NEW: Copied from plan-route.tsx ---
+const calculateDistance = (
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number => {
+  if (isNaN(lat1) || isNaN(lon1) || isNaN(lat2) || isNaN(lon2)) {
+    return Infinity;
+  }
+  const R = 6371; // Earth's radius in kilometers
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) *
+    Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) *
+    Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
 
 export default function SosScreen() {
   const router = useRouter();
   const { userProfile } = useAuth();
-  
+
   // --- State Management ---
   const [stage, setStage] = useState<SosStage>('assessment');
-  const [location, setLocation] = useState<ExpoLocation.LocationObject | null>(null);
+  const [location, setLocation] = useState<ExpoLocation.LocationObject | null>(
+    null
+  );
   const [address, setAddress] = useState<string>('Fetching location...');
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
-  
+
   const [problemType, setProblemType] = useState<ProblemType | null>(null);
   const [providers, setProviders] = useState<Provider[]>([]);
-  const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
+  
+  // --- MODIFIED: Renamed states for clarity ---
   const [confirmingProvider, setConfirmingProvider] = useState<Provider | null>(null);
+  const [selectedProviderOnMap, setSelectedProviderOnMap] = useState<Provider | null>(null);
 
+  // --- NEW STATE: For the detail sheet ---
+  const [selectedProviderDetails, setSelectedProviderDetails] = useState<Provider | null>(null);
+  const [isDetailSheetVisible, setIsDetailSheetVisible] = useState(false);
+  
   // --- Core Functions ---
 
   const fetchLocation = async (showRetry = false) => {
@@ -71,7 +108,7 @@ export default function SosScreen() {
       if (showRetry) setIsRefreshing(true);
       
       setLocationError(null);
-  let { status } = await ExpoLocation.requestForegroundPermissionsAsync();
+      let { status } = await ExpoLocation.requestForegroundPermissionsAsync();
       
       if (status !== 'granted') {
         setLocationError('Location permission denied. Please enable location services in settings.');
@@ -86,7 +123,7 @@ export default function SosScreen() {
       });
       setLocation(currentLocation);
 
-  let reverseGeocode = await ExpoLocation.reverseGeocodeAsync(currentLocation.coords);
+      let reverseGeocode = await ExpoLocation.reverseGeocodeAsync(currentLocation.coords);
       if (reverseGeocode.length > 0) {
         const addr = reverseGeocode[0];
         const formattedAddress = `${addr.name || ''}${addr.street ? `, ${addr.street}` : ''}${addr.city ? `, ${addr.city}` : ''}`;
@@ -115,8 +152,14 @@ export default function SosScreen() {
     setProblemType(problem);
     setIsLoading(true);
     
+    // --- MODIFIED: Ensure location is available ---
+    if (!location) {
+      Alert.alert("Location Error", "Cannot find providers without your location. Please try again.");
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      // Enhanced service type mapping
       const serviceTypeMap: Record<ProblemType, ServiceType[]> = {
         battery_drained: ['charging', 'towing'],
         battery_low: ['charging'],
@@ -133,15 +176,41 @@ export default function SosScreen() {
       );
       
       const providersSnapshot = await getDocs(providersQuery);
-      const providersData = providersSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Provider[];
+      
+      // --- MODIFIED: Calculate distance and add pricing ---
+      const providersData = providersSnapshot.docs.map(doc => {
+        const data = doc.data();
+        
+        // --- *** FIX *** ---
+        // Read the location as a map { latitude: ..., longitude: ... }
+        // Add a check in case the data is bad
+        const providerLocation = data.location;
+        let distance = Infinity;
+        
+        if (location && providerLocation && typeof providerLocation.latitude === 'number' && typeof providerLocation.longitude === 'number') {
+          distance = calculateDistance(
+            location.coords.latitude,
+            location.coords.longitude,
+            providerLocation.latitude, // Read from the map
+            providerLocation.longitude // Read from the map
+          );
+        } else {
+          console.warn(`Invalid location data for provider: ${data.name}`);
+        }
+        // --- *** END FIX *** ---
 
-      // Sort by ETA and rating
+        return {
+          id: doc.id,
+          ...data,
+          distance: distance, // Add the calculated distance
+          pricing: data.pricing || 'Pricing N/A' // Get the new pricing field
+        } as Provider;
+      });
+
+      // Sort by distance (new) OR eta
       const sortedProviders = providersData
-        .sort((a, b) => a.etaMinutes - b.etaMinutes || b.rating - a.rating)
-        .slice(0, 4); // Show top 4 relevant providers
+        .sort((a, b) => (a.distance || Infinity) - (b.distance || Infinity) || a.etaMinutes - b.etaMinutes)
+        .slice(0, 4); 
       
       setProviders(sortedProviders);
       setStage('options');
@@ -157,14 +226,22 @@ export default function SosScreen() {
     }
   };
   
+  // --- MODIFIED: This function now opens the detail sheet ---
   const handleProviderSelect = (provider: Provider) => {
-    setConfirmingProvider(provider);
-    setStage('confirmation');
+    setSelectedProviderDetails(provider);
+    setIsDetailSheetVisible(true);
+  };
+
+  // --- NEW: This function is called FROM the detail sheet ---
+  const handleConfirmFromSheet = (provider: Provider) => {
+    setIsDetailSheetVisible(false); // Close the sheet
+    setConfirmingProvider(provider); // Set the provider for the confirmation screen
+    setStage('confirmation');      // Move to the next stage
   };
 
   const confirmProviderSelection = () => {
     if (confirmingProvider) {
-      setSelectedProvider(confirmingProvider);
+      setSelectedProviderOnMap(confirmingProvider);
       setStage('tracking');
       setConfirmingProvider(null);
     }
@@ -198,8 +275,9 @@ export default function SosScreen() {
           text: "Yes, Cancel", 
           style: "destructive", 
           onPress: () => {
-            setSelectedProvider(null);
+            setSelectedProviderOnMap(null);
             setConfirmingProvider(null);
+            setSelectedProviderDetails(null); // Clear detail sheet state
             setStage('assessment');
           }
         }
@@ -217,8 +295,6 @@ export default function SosScreen() {
   };
 
   const getEmergencyNumber = () => {
-    // In a real app, you might want to detect the user's country
-    // and show the appropriate emergency number
     return '112'; // European emergency number
   };
 
@@ -287,7 +363,7 @@ export default function SosScreen() {
           onPress={() => handleAssessmentComplete(item.key as ProblemType)}
           accessibilityLabel={item.text}
         >
-    <Ionicons name={item.icon as any} size={24} color={COLORS.primary} style={styles.assessmentIcon} />
+          <Ionicons name={item.icon as any} size={24} color={COLORS.primary} style={styles.assessmentIcon} />
           <Text style={styles.assessmentText}>{item.text}</Text>
           <Ionicons name="chevron-forward" size={20} color={COLORS.textSecondary} />
         </TouchableOpacity>
@@ -304,26 +380,34 @@ export default function SosScreen() {
         <TouchableOpacity 
           key={provider.id} 
           style={styles.providerCard}
+          // --- MODIFIED: This now opens the detail sheet ---
           onPress={() => handleProviderSelect(provider)}
           accessibilityLabel={`Select ${provider.name}, ETA ${provider.etaMinutes} minutes, rating ${provider.rating} stars`}
         >
-          <View style={styles.providerHeader}>
-            <View style={styles.providerBadge}>
-              <Text style={styles.providerType}>{provider.type.toUpperCase()}</Text>
+          <View style={styles.providerInfo}>
+            <Text style={styles.providerName}>{provider.name}</Text>
+            <View style={styles.etaContainer}>
+              {/* --- NEW: Show distance in the list --- */}
+              <Ionicons name="map-outline" size={16} color={COLORS.textSecondary} />
+              <Text style={styles.etaText}>
+                {provider.distance ? `${provider.distance.toFixed(1)} km` : '...'}
+              </Text>
+              <Text style={styles.dotSeparator}>•</Text>
+              <Ionicons name="time-outline" size={16} color={COLORS.textSecondary} />
+              <Text style={styles.etaText}>ETA: {provider.etaMinutes} min</Text>
             </View>
+            {/* --- NEW: Show pricing in the list --- */}
+            <View style={styles.priceContainer}>
+              <Text style={styles.priceText}>{provider.pricing}</Text>
+            </View>
+          </View>
+          <View style={styles.providerRight}>
             <View style={styles.ratingContainer}>
               <Ionicons name="star" size={16} color={COLORS.warning} />
               <Text style={styles.ratingText}>{provider.rating}</Text>
             </View>
+            <Ionicons name="chevron-forward" size={20} color={COLORS.primary} style={{ marginTop: 8 }} />
           </View>
-          <View style={styles.providerInfo}>
-            <Text style={styles.providerName}>{provider.name}</Text>
-            <View style={styles.etaContainer}>
-              <Ionicons name="time-outline" size={16} color={COLORS.textSecondary} />
-              <Text style={styles.etaText}>ETA: {provider.etaMinutes} min</Text>
-            </View>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={COLORS.primary} />
         </TouchableOpacity>
       )) : (
         <View style={styles.emptyState}>
@@ -379,50 +463,61 @@ export default function SosScreen() {
           <Text style={styles.successText}>Service Requested</Text>
         </View>
         <Text style={styles.sectionTitle}>Help is on the way!</Text>
-        <Text style={styles.etaHighlight}>ETA: {selectedProvider?.etaMinutes} minutes</Text>
+        <Text style={styles.etaHighlight}>ETA: {selectedProviderOnMap?.etaMinutes} minutes</Text>
       </View>
       
-      <View style={styles.trackingMapContainer}>
-        <MapView
-          style={styles.map}
-          initialRegion={{
-            latitude: location?.coords.latitude || 0,
-            longitude: location?.coords.longitude || 0,
-            latitudeDelta: 0.02,
-            longitudeDelta: 0.02,
-          }}
-          showsUserLocation={true}
-        >
-          {selectedProvider && (
-            <Marker 
-              coordinate={selectedProvider.location} 
-              title={selectedProvider.name}
-              description={`ETA: ${selectedProvider.etaMinutes} min`}
+      {/* --- *** FIX *** --- */}
+      {/* Add a check for location AND selectedProviderOnMap.location */}
+      {/* This prevents the map from crashing if data is null */}
+      {location && selectedProviderOnMap && selectedProviderOnMap.location ? (
+        <View style={styles.trackingMapContainer}>
+          <MapView
+            style={styles.map}
+            initialRegion={{
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+              latitudeDelta: 0.02,
+              longitudeDelta: 0.02,
+            }}
+            showsUserLocation={true}
+          >
+            <Marker
+              coordinate={selectedProviderOnMap.location} // This is now a valid {lat, lng} object
+              title={selectedProviderOnMap.name}
+              description={`ETA: ${selectedProviderOnMap.etaMinutes} min`}
             >
               <View style={styles.providerMarker}>
                 <Ionicons name="car" size={20} color={COLORS.white} />
               </View>
             </Marker>
-          )}
-        </MapView>
-      </View>
+          </MapView>
+        </View>
+      ) : (
+        // Show a loading/error state if location is missing
+        <View style={styles.trackingMapContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Loading map...</Text>
+        </View>
+      )}
+      {/* --- *** END FIX *** --- */}
+
 
       <View style={styles.providerInfoCard}>
         <View style={styles.providerCardHeader}>
           <View>
-            <Text style={styles.providerName}>{selectedProvider?.name}</Text>
+            <Text style={styles.providerName}>{selectedProviderOnMap?.name}</Text>
             <View style={styles.providerStats}>
               <View style={styles.statItem}>
                 <Ionicons name="star" size={16} color={COLORS.warning} />
-                <Text style={styles.statText}>{selectedProvider?.rating}</Text>
+                <Text style={styles.statText}>{selectedProviderOnMap?.rating}</Text>
               </View>
               <View style={styles.statItem}>
                 <Ionicons name="time" size={16} color={COLORS.textSecondary} />
-                <Text style={styles.statText}>{selectedProvider?.etaMinutes} min</Text>
+                <Text style={styles.statText}>{selectedProviderOnMap?.etaMinutes} min</Text>
               </View>
               <View style={styles.statItem}>
                 <Ionicons name="hammer" size={16} color={COLORS.textSecondary} />
-                <Text style={styles.statText}>{selectedProvider?.type}</Text>
+                <Text style={styles.statText}>{selectedProviderOnMap?.type}</Text>
               </View>
             </View>
           </View>
@@ -431,7 +526,7 @@ export default function SosScreen() {
         <View style={styles.trackingButtons}>
           <TouchableOpacity 
             style={styles.callProviderButton} 
-            onPress={() => handleCall(selectedProvider?.phone || '')}
+            onPress={() => handleCall(selectedProviderOnMap?.phone || '')}
             accessibilityLabel="Call service provider"
           >
             <Ionicons name="call" size={20} color={COLORS.white} />
@@ -482,6 +577,14 @@ export default function SosScreen() {
         )}
       </ScrollView>
 
+      {/* --- NEW: Render the detail sheet --- */}
+      <ProviderDetailSheet
+        provider={selectedProviderDetails}
+        isVisible={isDetailSheetVisible}
+        onClose={() => setIsDetailSheetVisible(false)}
+        onConfirm={handleConfirmFromSheet}
+      />
+
       {/* Emergency Call Button */}
       <View style={styles.footer}>
         <TouchableOpacity 
@@ -499,177 +602,322 @@ export default function SosScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.lg },
-  backButton: { padding: SPACING.sm, marginRight: SPACING.sm },
-  headerBanner: { 
-    flex: 1, 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    backgroundColor: COLORS.error, 
-    padding: SPACING.md, 
-    borderRadius: RADIUS.md,
-    ...SHADOWS.sm
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.sm,
   },
-  headerText: { color: COLORS.white, fontSize: FONTS.sizes.md, fontWeight: FONTS.weights.bold, marginLeft: SPACING.sm },
+  backButton: { padding: SPACING.sm, marginRight: SPACING.sm },
+  headerBanner: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.error,
+    padding: SPACING.md,
+    borderRadius: RADIUS.md,
+    ...SHADOWS.sm,
+  },
+  headerText: {
+    color: COLORS.white,
+    fontSize: FONTS.sizes.md,
+    fontWeight: FONTS.weights.bold,
+    marginLeft: SPACING.sm,
+  },
   scrollContainer: { padding: SPACING.lg, paddingBottom: 100 },
   
   // Location Card
-  locationCard: { backgroundColor: COLORS.backgroundCard, borderRadius: RADIUS.lg, padding: SPACING.lg, marginBottom: SPACING.xl, ...SHADOWS.md },
-  locationHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.xs },
-  cardTitle: { flex: 1, fontSize: FONTS.sizes.sm, fontWeight: FONTS.weights.semibold, color: COLORS.textSecondary, marginLeft: SPACING.sm },
+  locationCard: {
+    backgroundColor: COLORS.backgroundCard,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.lg,
+    marginBottom: SPACING.xl,
+    ...SHADOWS.md,
+  },
+  locationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.xs,
+  },
+  cardTitle: {
+    flex: 1,
+    fontSize: FONTS.sizes.sm,
+    fontWeight: FONTS.weights.semibold,
+    color: COLORS.textSecondary,
+    marginLeft: SPACING.sm,
+  },
   refreshButton: { padding: SPACING.xs },
   refreshing: { transform: [{ rotate: '180deg' }] },
-  addressText: { fontSize: FONTS.sizes.base, fontWeight: FONTS.weights.semibold, color: COLORS.textPrimary },
-  errorText: { fontSize: FONTS.sizes.sm, color: COLORS.error, marginTop: SPACING.xs },
+  addressText: {
+    fontSize: FONTS.sizes.base,
+    fontWeight: FONTS.weights.semibold,
+    color: COLORS.textPrimary,
+  },
+  errorText: {
+    fontSize: FONTS.sizes.sm,
+    color: COLORS.error,
+    marginTop: SPACING.xs,
+  },
   
   // Stage Container
   stageContainer: { marginBottom: SPACING.xl },
-  sectionTitle: { fontSize: FONTS.sizes.xl, fontWeight: FONTS.weights.bold, color: COLORS.textPrimary, marginBottom: SPACING.xs },
-  sectionSubtitle: { fontSize: FONTS.sizes.base, color: COLORS.textSecondary, marginBottom: SPACING.lg },
+  sectionTitle: {
+    fontSize: FONTS.sizes.xl,
+    fontWeight: FONTS.weights.bold,
+    color: COLORS.textPrimary,
+    marginBottom: SPACING.xs,
+  },
+  sectionSubtitle: {
+    fontSize: FONTS.sizes.base,
+    color: COLORS.textSecondary,
+    marginBottom: SPACING.lg,
+  },
   
   // Assessment Screen
-  assessmentButton: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: COLORS.backgroundCard, 
-    padding: SPACING.lg, 
-    borderRadius: RADIUS.lg, 
-    marginBottom: SPACING.md, 
-    ...SHADOWS.sm 
+  assessmentButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.backgroundCard,
+    padding: SPACING.lg,
+    borderRadius: RADIUS.lg,
+    marginBottom: SPACING.md,
+    ...SHADOWS.sm,
   },
   assessmentIcon: { marginRight: SPACING.md },
-  assessmentText: { flex: 1, fontSize: FONTS.sizes.base, fontWeight: FONTS.weights.semibold, color: COLORS.textPrimary },
+  assessmentText: {
+    flex: 1,
+    fontSize: FONTS.sizes.base,
+    fontWeight: FONTS.weights.semibold,
+    color: COLORS.textPrimary,
+  },
   
   // Options Screen
-  providerCard: { 
-    backgroundColor: COLORS.backgroundCard, 
-    padding: SPACING.lg, 
-    borderRadius: RADIUS.lg, 
-    marginBottom: SPACING.md, 
-    ...SHADOWS.sm 
+  providerCard: {
+    backgroundColor: COLORS.backgroundCard,
+    padding: SPACING.lg,
+    borderRadius: RADIUS.lg,
+    marginBottom: SPACING.md,
+    ...SHADOWS.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  providerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.sm },
-  providerBadge: { backgroundColor: COLORS.primary + '20', paddingHorizontal: SPACING.sm, paddingVertical: SPACING.xs, borderRadius: RADIUS.sm },
-  providerType: { fontSize: FONTS.sizes.xs, fontWeight: FONTS.weights.bold, color: COLORS.primary },
-  ratingContainer: { flexDirection: 'row', alignItems: 'center' },
-  ratingText: { fontSize: FONTS.sizes.sm, fontWeight: FONTS.weights.semibold, color: COLORS.textPrimary, marginLeft: 4 },
   providerInfo: { flex: 1 },
-  providerName: { fontSize: FONTS.sizes.md, fontWeight: FONTS.weights.bold, color: COLORS.textPrimary, marginBottom: SPACING.xs },
-  etaContainer: { flexDirection: 'row', alignItems: 'center' },
-  etaText: { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary, marginLeft: SPACING.xs },
+  providerName: {
+    fontSize: FONTS.sizes.md,
+    fontWeight: FONTS.weights.bold,
+    color: COLORS.textPrimary,
+    marginBottom: SPACING.xs,
+  },
+  etaContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  etaText: {
+    fontSize: FONTS.sizes.sm,
+    color: COLORS.textSecondary,
+    fontWeight: FONTS.weights.medium,
+  },
+  dotSeparator: {
+    color: COLORS.textSecondary,
+    paddingHorizontal: SPACING.xs,
+  },
+  priceContainer: {
+    marginTop: SPACING.sm,
+  },
+  priceText: {
+    fontSize: FONTS.sizes.sm,
+    fontWeight: FONTS.weights.bold,
+    color: COLORS.primary,
+  },
+  providerRight: {
+    alignItems: 'flex-end',
+  },
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  ratingText: {
+    fontSize: FONTS.sizes.sm,
+    fontWeight: FONTS.weights.semibold,
+    color: COLORS.textPrimary,
+    marginLeft: 4,
+  },
   
   // Empty State
   emptyState: { alignItems: 'center', paddingVertical: SPACING.xl },
-  emptyStateTitle: { fontSize: FONTS.sizes.lg, fontWeight: FONTS.weights.bold, color: COLORS.textPrimary, marginTop: SPACING.md },
-  emptyStateText: { fontSize: FONTS.sizes.base, color: COLORS.textSecondary, textAlign: 'center', marginTop: SPACING.sm, marginBottom: SPACING.lg },
-  retryButton: { backgroundColor: COLORS.primary, paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md, borderRadius: RADIUS.md },
+  emptyStateTitle: {
+    fontSize: FONTS.sizes.lg,
+    fontWeight: FONTS.weights.bold,
+    color: COLORS.textPrimary,
+    marginTop: SPACING.md,
+  },
+  emptyStateText: {
+    fontSize: FONTS.sizes.base,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginTop: SPACING.sm,
+    marginBottom: SPACING.lg,
+  },
+  retryButton: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderRadius: RADIUS.md,
+  },
   retryButtonText: { color: COLORS.white, fontWeight: FONTS.weights.bold },
   
   // Confirmation Screen
   confirmationIcon: { alignItems: 'center', marginBottom: SPACING.lg },
-  confirmationTitle: { fontSize: FONTS.sizes.xl, fontWeight: FONTS.weights.bold, color: COLORS.textPrimary, textAlign: 'center', marginBottom: SPACING.md },
-  confirmationText: { fontSize: FONTS.sizes.base, color: COLORS.textSecondary, textAlign: 'center', marginBottom: SPACING.xl, lineHeight: 22 },
+  confirmationTitle: {
+    fontSize: FONTS.sizes.xl,
+    fontWeight: FONTS.weights.bold,
+    color: COLORS.textPrimary,
+    textAlign: 'center',
+    marginBottom: SPACING.md,
+  },
+  confirmationText: {
+    fontSize: FONTS.sizes.base,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginBottom: SPACING.xl,
+    lineHeight: 22,
+  },
   confirmationButtons: { gap: SPACING.md },
-  confirmationButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: SPACING.lg, borderRadius: RADIUS.lg },
+  confirmationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: SPACING.lg,
+    borderRadius: RADIUS.lg,
+  },
   confirmButton: { backgroundColor: COLORS.success, gap: SPACING.sm },
-  confirmButtonText: { color: COLORS.white, fontWeight: FONTS.weights.bold, fontSize: FONTS.sizes.md },
+  confirmButtonText: {
+    color: COLORS.white,
+    fontWeight: FONTS.weights.bold,
+    fontSize: FONTS.sizes.md,
+  },
   cancelConfirmButton: { backgroundColor: COLORS.neutral100 },
-  cancelConfirmText: { color: COLORS.textPrimary, fontWeight: FONTS.weights.semibold },
+  cancelConfirmText: {
+    color: COLORS.textPrimary,
+    fontWeight: FONTS.weights.semibold,
+  },
   
   // Tracking Screen
   trackingHeader: { alignItems: 'center', marginBottom: SPACING.lg },
-  successBadge: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: COLORS.success, 
-    paddingHorizontal: SPACING.md, 
-    paddingVertical: SPACING.xs, 
-    borderRadius: RADIUS.md, 
-    marginBottom: SPACING.md 
+  successBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.success,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: RADIUS.md,
+    marginBottom: SPACING.md,
   },
-  successText: { color: COLORS.white, fontWeight: FONTS.weights.bold, fontSize: FONTS.sizes.sm, marginLeft: SPACING.xs },
-  etaHighlight: { fontSize: FONTS.sizes.lg, fontWeight: FONTS.weights.bold, color: COLORS.primary, marginTop: SPACING.xs },
+  successText: {
+    color: COLORS.white,
+    fontWeight: FONTS.weights.bold,
+    fontSize: FONTS.sizes.sm,
+    marginLeft: SPACING.xs,
+  },
+  etaHighlight: {
+    fontSize: FONTS.sizes.lg,
+    fontWeight: FONTS.weights.bold,
+    color: COLORS.primary,
+    marginTop: SPACING.xs,
+  },
   
-  trackingMapContainer: { 
-    height: 250, 
-    borderRadius: RADIUS.lg, 
-    overflow: 'hidden', 
-    marginBottom: SPACING.lg, 
-    ...SHADOWS.md 
+  trackingMapContainer: {
+    height: 250,
+    borderRadius: RADIUS.lg,
+    overflow: 'hidden',
+    marginBottom: SPACING.lg,
+    ...SHADOWS.md,
   },
   map: { ...StyleSheet.absoluteFillObject },
-  providerMarker: { 
-    backgroundColor: COLORS.primary, 
-    padding: SPACING.xs, 
-    borderRadius: RADIUS.sm,
-    ...SHADOWS.md 
+  providerMarker: {
+    backgroundColor: COLORS.primary,
+    padding: SPACING.sm,
+    borderRadius: RADIUS.md,
+    ...SHADOWS.md,
   },
   
-  providerInfoCard: { 
-    backgroundColor: COLORS.backgroundCard, 
-    borderRadius: RADIUS.lg, 
-    padding: SPACING.lg, 
-    ...SHADOWS.md 
+  providerInfoCard: {
+    backgroundColor: COLORS.backgroundCard,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.lg,
+    ...SHADOWS.md,
   },
-  providerCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: SPACING.lg },
+  providerCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: SPACING.lg,
+  },
   providerStats: { flexDirection: 'row', gap: SPACING.md, marginTop: SPACING.sm },
   statItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   statText: { fontSize: FONTS.sizes.sm, color: COLORS.textSecondary },
   
   trackingButtons: { flexDirection: 'row', gap: SPACING.md },
-  callProviderButton: { 
-    flex: 2, 
-    flexDirection: 'row', 
-    gap: SPACING.sm, 
-    backgroundColor: COLORS.primary, 
-    padding: SPACING.lg, 
-    borderRadius: RADIUS.md, 
-    alignItems: 'center', 
-    justifyContent: 'center' 
+  callProviderButton: {
+    flex: 2,
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    backgroundColor: COLORS.primary,
+    padding: SPACING.lg,
+    borderRadius: RADIUS.md,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   callProviderText: { color: COLORS.white, fontWeight: FONTS.weights.bold },
-  cancelButton: { 
-    flex: 1, 
-    flexDirection: 'row', 
-    gap: SPACING.sm, 
-    backgroundColor: COLORS.neutral100, 
-    padding: SPACING.lg, 
-    borderRadius: RADIUS.md, 
-    alignItems: 'center', 
-    justifyContent: 'center' 
+  cancelButton: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    backgroundColor: COLORS.neutral100,
+    padding: SPACING.lg,
+    borderRadius: RADIUS.md,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cancelText: { color: COLORS.textPrimary, fontWeight: FONTS.weights.semibold },
   
   // Loading
   loadingContainer: { alignItems: 'center', paddingVertical: SPACING.xl },
-  loadingText: { marginTop: SPACING.md, fontSize: FONTS.sizes.base, color: COLORS.textSecondary },
+  loadingText: {
+    marginTop: SPACING.md,
+    fontSize: FONTS.sizes.base,
+    color: COLORS.textSecondary,
+  },
   
   // Footer
-  footer: { 
-    position: 'absolute', 
-    bottom: 0, 
-    left: 0, 
-    right: 0, 
-    padding: SPACING.lg, 
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: SPACING.lg,
     backgroundColor: COLORS.background,
-    borderTopWidth: 1, 
+    borderTopWidth: 1,
     borderTopColor: COLORS.border,
-    ...SHADOWS.md
+    ...SHADOWS.md,
   },
-  callEmergencyButton: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    backgroundColor: COLORS.error, 
-    padding: SPACING.lg, 
+  callEmergencyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.error,
+    padding: SPACING.lg,
     borderRadius: RADIUS.lg,
-    ...SHADOWS.sm
+    ...SHADOWS.sm,
   },
-  callEmergencyText: { 
-    color: COLORS.white, 
-    fontSize: FONTS.sizes.base, 
-    fontWeight: FONTS.weights.bold, 
-    marginLeft: SPACING.sm 
+  callEmergencyText: {
+    color: COLORS.white,
+    fontSize: FONTS.sizes.base,
+    fontWeight: FONTS.weights.bold,
+    marginLeft: SPACING.sm,
   },
 }) as any;
