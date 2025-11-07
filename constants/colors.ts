@@ -22,6 +22,9 @@ export const withOpacity = (color: string, opacity: number): string => {
 export const COLORS = {
   // Primary brand colors - Updated theme
   primary: '#2E86AB',        // Electric blue as primary
+  primary5: '#F0F8FB',       // Ultra light primary (5% - NEW)
+  primary10: '#E1F1F7',      // Very very light primary (10% - NEW)
+  primary20: '#C3E3EF',      // Extra light primary (20% - NEW)
   primary50: '#E8F4F8',      // Ultra light primary
   primary100: '#C5E3F0',     // Very light primary
   primary200: '#9DD0E7',     // Light primary
@@ -154,10 +157,12 @@ export const COLORS = {
 
 export const FONTS = {
   // Font families
-  regular: 'System',           // Default system font
-  medium: 'System',            // Medium weight
-  semibold: 'System',          // Semi-bold weight
-  bold: 'System',              // Bold weight
+  family: {
+    regular: 'System',           // Default system font
+    medium: 'System',            // Medium weight
+    semibold: 'System',          // Semi-bold weight
+    bold: 'System',              // Bold weight
+  },
   
   // Font weights (for when custom fonts are used)
   weights: {
@@ -174,7 +179,7 @@ export const FONTS = {
     xs: 12,      // Captions, labels
     sm: 14,      // Small text, secondary info
     base: 16,    // Body text, default
-    md: 18,      // Slightly larger body
+    md: 18,      // Slightly larger body (NEW)
     lg: 20,      // Subheadings
     xl: 24,      // Headings
     xxl: 28,     // Large headings
@@ -276,7 +281,17 @@ export const BREAKPOINTS = {
 
 // Shadow configurations
 const _SHADOWS = {
-  small: {
+  xs: {
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  sm: {
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -286,7 +301,7 @@ const _SHADOWS = {
     shadowRadius: 3,
     elevation: 2,
   },
-  medium: {
+  md: {
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -296,7 +311,7 @@ const _SHADOWS = {
     shadowRadius: 6,
     elevation: 4,
   },
-  large: {
+  lg: {
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -306,14 +321,24 @@ const _SHADOWS = {
     shadowRadius: 12,
     elevation: 8,
   },
+  xl: {
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 12,
+    },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 12,
+  },
 };
 
-// Export shadows with shorthand aliases included in the type
+// Export shadows with all variants
 export const SHADOWS = {
   ..._SHADOWS,
-  sm: _SHADOWS.small,
-  md: _SHADOWS.medium,
-  lg: _SHADOWS.large,
+  small: _SHADOWS.sm,
+  medium: _SHADOWS.md,
+  large: _SHADOWS.lg,
 } as const;
 
 // EV-specific constants

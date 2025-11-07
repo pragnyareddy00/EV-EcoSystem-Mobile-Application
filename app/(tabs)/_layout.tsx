@@ -1,12 +1,24 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import React from 'react';
+import { ActivityIndicator, View } from 'react-native';
 import { COLORS } from '../../constants/colors';
 import { useAuth } from '../../context/AuthContext';
 
 export default function TabsLayout() {
-  const { userProfile } = useAuth();
+  const { userProfile, isLoading } = useAuth();
   
+  // Show loading indicator while checking auth state
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+      </View>
+    );
+  }
+  
+  const isAdmin = userProfile?.role === 'admin';
+
   return (
     <Tabs
       screenOptions={{
@@ -33,7 +45,7 @@ export default function TabsLayout() {
         name="home"
         options={{
           title: 'Home',
-          headerShown: false, // We will create a custom header on the home screen
+          headerShown: false,
           tabBarIcon: ({ color, size }) => <Ionicons name="home-outline" color={color} size={size} />,
         }}
       />
@@ -58,32 +70,33 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" color={color} size={size} />,
         }}
       />
+      
       {/* These screens will be hidden from the tab bar but we can navigate to them */}
       <Tabs.Screen
         name="addVehicle"
         options={{
-          href: null, // Hides this screen from the tab bar
+          href: null,
           title: 'Add Your Vehicle',
         }}
       />
       <Tabs.Screen
         name="addStation"
         options={{
-          href: null, // Hides this screen from the tab bar
+          href: null,
           title: 'Add Station',
         }}
       />
-      {/* Admin tab - only visible to admin users */}
-      {userProfile?.role === 'admin' && (
-        <Tabs.Screen
-          name="admin"
-          options={{
-            title: 'Admin',
-            tabBarIcon: ({ color, size }) => <Ionicons name="settings-outline" color={color} size={size} />,
-          }}
-        />
-      )}
+      
+      {/* Admin tab - conditionally hidden using href: null for non-admin users */}
+      <Tabs.Screen
+        name="admin"
+        options={{
+          title: 'Admin',
+          tabBarIcon: ({ color, size }) => <Ionicons name="settings-outline" color={color} size={size} />,
+          // This is the key change - use href: null to hide the tab
+          href: isAdmin ? undefined : null,
+        }}
+      />
     </Tabs>
   );
 }
-

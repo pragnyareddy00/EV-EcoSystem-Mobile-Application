@@ -1,8 +1,6 @@
-# TODO: Fix Navigation Routes in Profile Screen
+# TODO List for Fixing AdminScreen Role Check and setState Error
 
-## Steps to Complete:
-- [x] Update navigation paths in app/(tabs)/profile.tsx to use correct relative paths
-- [x] Change `./profile/my-vehicle` to `./my-vehicle`
-- [x] Change `./profile/app-settings` to `./app-settings`
-- [x] Change `./profile/contribute-station` to `./contribute-station`
-- [x] Change `./profile/edit-profile` to `./edit-profile`
+## Tasks
+- [x] Move role check from render to useEffect in AdminScreen to prevent setState during render
+- [x] Add useEffect to redirect non-admin users away from admin page
+- [x] Test that admin users can access the page and non-admins are redirected
