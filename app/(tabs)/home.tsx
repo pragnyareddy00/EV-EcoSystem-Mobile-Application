@@ -15,16 +15,25 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
-import { StationDetailSheet } from '../../components/StationDetailSheet'; // --- IMPORTED ---
+import { StationDetailSheet } from '../../components/StationDetailSheet'; // Import the new component
 import { COLORS } from '../../constants/colors';
 import { Station } from '../../constants/stations';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../services/firebase';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// --- NEW: Function was moved to home.tsx ---
+const getStatusBackgroundColor = (status: string) => {
+  switch (status) {
+    case 'available': return '#dcfce7';
+    case 'busy': return '#fef3c7';
+    default: return '#fee2e2';
+  }
+};
 
 // Debounce hook for performance
 function useDebounce<T>(value: T, delay: number): T {
@@ -45,7 +54,7 @@ function useDebounce<T>(value: T, delay: number): T {
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { userProfile, isLoading } = useAuth();
+  const { userProfile, isLoading, updateVehicleState } = useAuth(); // Get updateVehicleState
   const mapRef = useRef<MapView>(null);
   
   const [region, setRegion] = useState<Region | null>(null);
@@ -57,16 +66,18 @@ export default function HomeScreen() {
   const [isSearching, setIsSearching] = useState(false);
   const [mapHeight] = useState(new Animated.Value(0.60));
   const [isMapExpanded, setIsMapExpanded] = useState(true);
+  
+  // Use SOC from context, default to 85
+  const currentSOC = userProfile?.vehicleState?.currentSOC || 85;
+  const [tempSoC, setTempSoC] = useState(currentSOC.toString());
+  
+  const [socModalVisible, setSocModalVisible] = useState(false);
   const [nearestStations, setNearestStations] = useState<Station[]>([]);
   const [isAnimating, setIsAnimating] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [locationLoading, setLocationLoading] = useState(true);
   const [selectedStation, setSelectedStation] = useState<Station | null>(null);
   const [isStationSheetVisible, setIsStationSheetVisible] = useState(false);
-
-  // --- NEW: Get SOC from AuthContext ---
-  const currentSOC = userProfile?.vehicleState?.currentSOC || 85;
-  // --- END NEW ---
 
   // Debounced search for better performance
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
@@ -76,6 +87,11 @@ export default function HomeScreen() {
       router.replace('/(tabs)/addVehicle');
     }
   }, [userProfile, isLoading]);
+
+  // Update tempSoC when context changes
+  useEffect(() => {
+    setTempSoC(currentSOC.toString());
+  }, [currentSOC]);
 
   // Enhanced location request with better error handling
   const requestLocation = useCallback(async () => {
@@ -153,8 +169,6 @@ export default function HomeScreen() {
             const rawServices = data.services;
             const rawIsAvailable = data.isAvailable;
             const rawConnectorType = data.connectorType;
-            const rawPrice = data.price;
-            const rawRating = data.rating;
             
             // Check if coordinates exist and are valid
             if (rawLat === undefined || rawLon === undefined || 
@@ -372,6 +386,23 @@ export default function HomeScreen() {
     setIsMapExpanded(!isMapExpanded);
   };
 
+  // Enhanced SoC update with validation
+  const updateSoC = async () => {
+    const newSoC = parseInt(tempSoC);
+    if (!isNaN(newSoC) && newSoC >= 0 && newSoC <= 100) {
+      // --- NEW: Use the function from AuthContext ---
+      await updateVehicleState({ currentSOC: newSoC });
+      // --- END NEW ---
+
+      setSocModalVisible(false);
+
+      // Show confirmation
+      Alert.alert('Success', `Battery level updated to ${newSoC}%`);
+    } else {
+      Alert.alert('Invalid Input', 'Please enter a valid battery percentage between 0 and 100.');
+    }
+  };
+
   // Enhanced quick actions
   const handleQuickAction = useCallback((action: string) => {
     switch (action) {
@@ -382,9 +413,11 @@ export default function HomeScreen() {
           Alert.alert('No Stations', 'No charging stations found nearby. Please try again later.');
         }
         break;
+      // --- MODIFIED: Navigate to our new screen ---
       case 'routePlan':
-        router.push('/(tabs)/routing');
+        router.push('/plan-route');
         break;
+      // --- END MODIFICATION ---
       case 'emergency':
         Alert.alert(
           'Emergency SOS',
@@ -461,12 +494,6 @@ export default function HomeScreen() {
     }
   }, [requestLocation, loadStations]);
 
-  // --- NEW: Calculate estimated range based on context ---
-  const estimatedRange = Math.round(
-    (currentSOC / 100) * (userProfile?.vehicle?.realWorldRangeKm || 0)
-  );
-  // --- END NEW ---
-
   // Enhanced permission error handling
   if (permissionError && !region) {
     return (
@@ -529,7 +556,7 @@ export default function HomeScreen() {
     );
   }
 
-  // --- Utility functions needed by Marker (must stay in this file) ---
+  // --- NEW: Helper function from home.tsx ---
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'available': return '#10b981';
@@ -537,25 +564,8 @@ export default function HomeScreen() {
       default: return '#ef4444';
     }
   };
-  
-  // --- FIXED: Added getStatusBackgroundColor back ---
-  const getStatusBackgroundColor = (status: string) => {
-    switch (status) {
-      case 'available': return '#dcfce7';
-      case 'busy': return '#fef3c7';
-      default: return '#fee2e2';
-    }
-  };
-  
-  // --- FIXED: Added getStatusTextColor back ---
-  const getStatusTextColor = (status: string) => {
-    switch (status) {
-      case 'available': return '#059669';
-      case 'busy': return '#d97706';
-      default: return '#dc2626';
-    }
-  };
-  
+
+  // --- NEW: Helper function from home.tsx ---
   const getStationIconName = (type: string) => {
     const typeLower = type?.toLowerCase() || '';
     if (typeLower.includes('fast') || typeLower.includes('dc')) return 'flash';
@@ -563,7 +573,15 @@ export default function HomeScreen() {
     if (typeLower.includes('tesla')) return 'car-sport';
     return 'battery-charging';
   };
-  // --- End Marker utility functions ---
+  
+  // --- NEW: Helper function from home.tsx ---
+  const getStatusTextColor = (status: string) => {
+    switch (status) {
+      case 'available': return '#059669';
+      case 'busy': return '#d97706';
+      default: return '#dc2626';
+    }
+  };
 
 
   return (
@@ -642,14 +660,15 @@ export default function HomeScreen() {
                       }}
                     >
                       <View style={styles.searchResultLeft}>
-                        {/* --- FIXED: Apply style inline --- */}
                         <View style={[
                           styles.searchResultIcon, 
+                          // --- FIX: Using the helper function ---
                           { backgroundColor: getStatusBackgroundColor(station.status) }
                         ]}>
                           <Ionicons 
                             name={getStationIconName(station.type) as any}
                             size={14} 
+                            // --- FIX: Using the helper function ---
                             color={getStatusColor(station.status)} 
                           />
                         </View>
@@ -683,6 +702,7 @@ export default function HomeScreen() {
         {/* Enhanced SoC Indicator */}
         <TouchableOpacity
           style={styles.socContainer}
+          // --- MODIFIED: Navigate to new screen ---
           onPress={() => router.push('/profile/vehicle-status')}
           activeOpacity={0.7}
         >
@@ -692,7 +712,7 @@ export default function HomeScreen() {
               <Text style={[styles.socValue, { color: getSoCColor() }]}>{currentSOC}%</Text>
             </View>
             <Text style={styles.socRange}>
-              ~{estimatedRange}km
+              ~{Math.round(currentSOC * ((userProfile?.vehicle?.realWorldRangeKm || 0) / 100))}km
             </Text>
             <Text style={styles.socStatus}>{getSoCStatus()}</Text>
           </View>
@@ -828,14 +848,15 @@ export default function HomeScreen() {
                   activeOpacity={0.7}
                 >
                   <View style={styles.stationLeft}>
-                    {/* --- FIXED: Apply style inline --- */}
                     <View style={[
                       styles.stationIconContainer,
+                      // --- FIX: Using the helper function ---
                       { backgroundColor: getStatusBackgroundColor(station.status) }
                     ]}>
                       <Ionicons 
                         name={getStationIconName(station.type) as any}
                         size={20} 
+                        // --- FIX: Using the helper function ---
                         color={getStatusColor(station.status)} 
                       />
                     </View>
@@ -855,17 +876,19 @@ export default function HomeScreen() {
                     <Text style={styles.stationDistance}>
                       {station.distance?.toFixed(1)} km
                     </Text>
-                    {/* --- FIXED: Apply style inline --- */}
                     <View style={[
                       styles.statusBadge,
+                      // --- FIX: Using the helper function ---
                       { backgroundColor: getStatusBackgroundColor(station.status) }
                     ]}>
                       <View style={[
                         styles.statusDot,
+                        // --- FIX: Using the helper function ---
                         { backgroundColor: getStatusColor(station.status) }
                       ]} />
                       <Text style={[
                         styles.statusText,
+                        // --- FIX: Using the helper function ---
                         { color: getStatusTextColor(station.status) }
                       ]}>
                         {station.status}
@@ -892,6 +915,10 @@ export default function HomeScreen() {
           <View style={styles.bottomSpacer} />
         </ScrollView>
       </Animated.View>
+      
+      {/* This Modal is no longer needed here as it's been replaced
+        by the `vehicle-status.tsx` screen.
+      */}
 
       {/* Station Detail Sheet */}
       <StationDetailSheet
@@ -1065,7 +1092,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
-    // backgroundColor removed
   },
   searchResultText: {
     marginLeft: 10,
@@ -1322,7 +1348,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
-    // backgroundColor removed
   },
   stationInfo: {
     flex: 1,
@@ -1369,19 +1394,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
-    // backgroundColor removed
   },
   statusDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    // backgroundColor removed (will be set inline)
   },
   statusText: {
     fontSize: 10,
     fontWeight: '700',
     textTransform: 'capitalize',
-    // color removed (will be set inline)
   },
   stationArrow: {
     width: 24,
