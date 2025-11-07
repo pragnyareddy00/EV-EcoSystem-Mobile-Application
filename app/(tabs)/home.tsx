@@ -8,7 +8,6 @@ import {
   Alert,
   Animated,
   Dimensions,
-  Modal,
   RefreshControl,
   SafeAreaView,
   ScrollView,
@@ -19,45 +18,13 @@ import {
   View,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
+import { StationDetailSheet } from '../../components/StationDetailSheet'; // --- IMPORTED ---
 import { COLORS } from '../../constants/colors';
 import { Station } from '../../constants/stations';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../services/firebase';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-
-// Utility functions
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case 'available': return '#10b981';
-    case 'busy': return '#f59e0b';
-    default: return '#ef4444';
-  }
-};
-
-const getStatusBackgroundColor = (status: string) => {
-  switch (status) {
-    case 'available': return '#dcfce7';
-    case 'busy': return '#fef3c7';
-    default: return '#fee2e2';
-  }
-};
-
-const getStatusTextColor = (status: string) => {
-  switch (status) {
-    case 'available': return '#059669';
-    case 'busy': return '#d97706';
-    default: return '#dc2626';
-  }
-};
-
-const getStationIconName = (type: string) => {
-  const typeLower = type?.toLowerCase() || '';
-  if (typeLower.includes('fast') || typeLower.includes('dc')) return 'flash';
-  if (typeLower.includes('swap')) return 'repeat';
-  if (typeLower.includes('tesla')) return 'car-sport';
-  return 'battery-charging';
-};
 
 // Debounce hook for performance
 function useDebounce<T>(value: T, delay: number): T {
@@ -76,169 +43,6 @@ function useDebounce<T>(value: T, delay: number): T {
   return debouncedValue;
 }
 
-// Station Detail Sheet Component
-interface StationDetailSheetProps {
-  station: Station | null;
-  isVisible: boolean;
-  onClose: () => void;
-  onNavigate: (station: Station) => void;
-}
-
-const StationDetailSheet = React.memo(({ station, isVisible, onClose, onNavigate }: StationDetailSheetProps) => {
-  const slideAnimation = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
-
-  useEffect(() => {
-    if (isVisible && station) {
-      Animated.spring(slideAnimation, {
-        toValue: 0,
-        useNativeDriver: true,
-        tension: 100,
-        friction: 8,
-      }).start();
-    } else {
-      Animated.spring(slideAnimation, {
-        toValue: SCREEN_HEIGHT,
-        useNativeDriver: true,
-        tension: 100,
-        friction: 8,
-      }).start();
-    }
-  }, [isVisible, station]);
-
-  if (!station) return null;
-
-  return (
-    <Modal
-      visible={isVisible}
-      transparent
-      animationType="none"
-      onRequestClose={onClose}
-    >
-      <View style={styles.sheetOverlay}>
-        <TouchableOpacity 
-          style={styles.sheetBackdrop} 
-          activeOpacity={1} 
-          onPress={onClose}
-        />
-        
-        <Animated.View 
-          style={[
-            styles.sheetContainer,
-            { transform: [{ translateY: slideAnimation }] }
-          ]}
-        >
-          {/* Sheet Handle */}
-          <View style={styles.sheetHandle} />
-
-          {/* Station Header */}
-          <View style={styles.sheetHeader}>
-            <View style={styles.sheetHeaderLeft}>
-              <View style={[
-                styles.sheetStationIcon,
-                { backgroundColor: getStatusBackgroundColor(station.status) }
-              ]}>
-                <Ionicons 
-                  name={getStationIconName(station.type) as any}
-                  size={24} 
-                  color={getStatusColor(station.status)} 
-                />
-              </View>
-              <View style={styles.sheetHeaderText}>
-                <Text style={styles.sheetStationName} numberOfLines={1}>
-                  {station.name}
-                </Text>
-                <View style={[
-                  styles.sheetStatusBadge,
-                  { backgroundColor: getStatusBackgroundColor(station.status) }
-                ]}>
-                  <View style={[
-                    styles.sheetStatusDot,
-                    { backgroundColor: getStatusColor(station.status) }
-                  ]} />
-                  <Text style={[
-                    styles.sheetStatusText,
-                    { color: getStatusColor(station.status) }
-                  ]}>
-                    {station.status}
-                  </Text>
-                </View>
-              </View>
-            </View>
-            <TouchableOpacity onPress={onClose} style={styles.sheetCloseButton}>
-              <Ionicons name="close" size={20} color="#64748b" />
-            </TouchableOpacity>
-          </View>
-
-          {/* Station Details */}
-          <ScrollView style={styles.sheetContent} showsVerticalScrollIndicator={false}>
-            {/* Address */}
-            <View style={styles.sheetDetailItem}>
-              <Ionicons name="location-outline" size={18} color="#64748b" />
-              <Text style={styles.sheetDetailText}>{station.address}</Text>
-            </View>
-
-            {/* Power & Type */}
-            <View style={styles.sheetDetailRow}>
-              <View style={styles.sheetDetailItem}>
-                <Ionicons name="flash-outline" size={18} color="#64748b" />
-                <Text style={styles.sheetDetailText}>{station.power}kW</Text>
-              </View>
-              <View style={styles.sheetDetailItem}>
-                <Ionicons name="hardware-chip-outline" size={18} color="#64748b" />
-                <Text style={styles.sheetDetailText}>{station.type}</Text>
-              </View>
-            </View>
-
-            {/* Distance */}
-            {station.distance !== undefined && (
-              <View style={styles.sheetDetailItem}>
-                <Ionicons name="navigate-outline" size={18} color="#64748b" />
-                <Text style={styles.sheetDetailText}>
-                  {station.distance.toFixed(1)} km away
-                </Text>
-              </View>
-            )}
-
-            {/* Services */}
-            {station.services && station.services.length > 0 && (
-              <View style={styles.sheetServicesContainer}>
-                <Text style={styles.sheetServicesTitle}>Available Services</Text>
-                <View style={styles.sheetServices}>
-                  {station.services.map((service, index) => (
-                    <View key={index} style={styles.sheetServiceTag}>
-                      <Text style={styles.sheetServiceText}>{service}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
-          </ScrollView>
-
-          {/* Navigation Button */}
-          <View style={styles.sheetFooter}>
-            <TouchableOpacity
-              style={[
-                styles.sheetNavigateButton,
-                station.status !== 'available' && styles.sheetNavigateButtonDisabled
-              ]}
-              onPress={() => {
-                onNavigate(station);
-                onClose();
-              }}
-              disabled={station.status === 'offline'}
-            >
-              <Ionicons name="navigate" size={20} color="#fff" />
-              <Text style={styles.sheetNavigateText}>
-                {station.status === 'offline' ? 'Station Offline' : 'Start Navigation'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
-      </View>
-    </Modal>
-  );
-});
-
 export default function HomeScreen() {
   const router = useRouter();
   const { userProfile, isLoading } = useAuth();
@@ -253,15 +57,16 @@ export default function HomeScreen() {
   const [isSearching, setIsSearching] = useState(false);
   const [mapHeight] = useState(new Animated.Value(0.60));
   const [isMapExpanded, setIsMapExpanded] = useState(true);
-  const [socModalVisible, setSocModalVisible] = useState(false);
-  const [currentSoC, setCurrentSoC] = useState(85);
-  const [tempSoC, setTempSoC] = useState('85');
   const [nearestStations, setNearestStations] = useState<Station[]>([]);
   const [isAnimating, setIsAnimating] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [locationLoading, setLocationLoading] = useState(true);
   const [selectedStation, setSelectedStation] = useState<Station | null>(null);
   const [isStationSheetVisible, setIsStationSheetVisible] = useState(false);
+
+  // --- NEW: Get SOC from AuthContext ---
+  const currentSOC = userProfile?.vehicleState?.currentSOC || 85;
+  // --- END NEW ---
 
   // Debounced search for better performance
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
@@ -567,20 +372,6 @@ export default function HomeScreen() {
     setIsMapExpanded(!isMapExpanded);
   };
 
-  // Enhanced SoC update with validation
-  const updateSoC = () => {
-    const newSoC = parseInt(tempSoC);
-    if (!isNaN(newSoC) && newSoC >= 0 && newSoC <= 100) {
-      setCurrentSoC(newSoC);
-      setSocModalVisible(false);
-      
-      // Show confirmation
-      Alert.alert('Success', `Battery level updated to ${newSoC}%`);
-    } else {
-      Alert.alert('Invalid Input', 'Please enter a valid battery percentage between 0 and 100.');
-    }
-  };
-
   // Enhanced quick actions
   const handleQuickAction = useCallback((action: string) => {
     switch (action) {
@@ -644,19 +435,19 @@ export default function HomeScreen() {
 
   // Enhanced SoC color and status
   const getSoCColor = useCallback(() => {
-    if (currentSoC > 60) return '#10b981'; // Green
-    if (currentSoC > 30) return '#f59e0b'; // Amber
-    if (currentSoC > 15) return '#f97316'; // Orange
+    if (currentSOC > 60) return '#10b981'; // Green
+    if (currentSOC > 30) return '#f59e0b'; // Amber
+    if (currentSOC > 15) return '#f97316'; // Orange
     return '#ef4444'; // Red
-  }, [currentSoC]);
+  }, [currentSOC]);
 
   const getSoCStatus = useCallback(() => {
-    if (currentSoC > 80) return 'Excellent';
-    if (currentSoC > 60) return 'Good';
-    if (currentSoC > 30) return 'Moderate';
-    if (currentSoC > 15) return 'Low';
+    if (currentSOC > 80) return 'Excellent';
+    if (currentSOC > 60) return 'Good';
+    if (currentSOC > 30) return 'Moderate';
+    if (currentSOC > 15) return 'Low';
     return 'Critical';
-  }, [currentSoC]);
+  }, [currentSOC]);
 
   // Pull to refresh
   const onRefresh = useCallback(async () => {
@@ -669,6 +460,12 @@ export default function HomeScreen() {
       setRefreshing(false);
     }
   }, [requestLocation, loadStations]);
+
+  // --- NEW: Calculate estimated range based on context ---
+  const estimatedRange = Math.round(
+    (currentSOC / 100) * (userProfile?.vehicle?.realWorldRangeKm || 0)
+  );
+  // --- END NEW ---
 
   // Enhanced permission error handling
   if (permissionError && !region) {
@@ -731,6 +528,43 @@ export default function HomeScreen() {
       </View>
     );
   }
+
+  // --- Utility functions needed by Marker (must stay in this file) ---
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'available': return '#10b981';
+      case 'busy': return '#f59e0b';
+      default: return '#ef4444';
+    }
+  };
+  
+  // --- FIXED: Added getStatusBackgroundColor back ---
+  const getStatusBackgroundColor = (status: string) => {
+    switch (status) {
+      case 'available': return '#dcfce7';
+      case 'busy': return '#fef3c7';
+      default: return '#fee2e2';
+    }
+  };
+  
+  // --- FIXED: Added getStatusTextColor back ---
+  const getStatusTextColor = (status: string) => {
+    switch (status) {
+      case 'available': return '#059669';
+      case 'busy': return '#d97706';
+      default: return '#dc2626';
+    }
+  };
+  
+  const getStationIconName = (type: string) => {
+    const typeLower = type?.toLowerCase() || '';
+    if (typeLower.includes('fast') || typeLower.includes('dc')) return 'flash';
+    if (typeLower.includes('swap')) return 'repeat';
+    if (typeLower.includes('tesla')) return 'car-sport';
+    return 'battery-charging';
+  };
+  // --- End Marker utility functions ---
+
 
   return (
     <SafeAreaView style={styles.container}>
@@ -808,6 +642,7 @@ export default function HomeScreen() {
                       }}
                     >
                       <View style={styles.searchResultLeft}>
+                        {/* --- FIXED: Apply style inline --- */}
                         <View style={[
                           styles.searchResultIcon, 
                           { backgroundColor: getStatusBackgroundColor(station.status) }
@@ -848,16 +683,16 @@ export default function HomeScreen() {
         {/* Enhanced SoC Indicator */}
         <TouchableOpacity
           style={styles.socContainer}
-          onPress={() => setSocModalVisible(true)}
+          onPress={() => router.push('/profile/vehicle-status')}
           activeOpacity={0.7}
         >
           <View style={[styles.socCard, { borderLeftColor: getSoCColor() }]}>
             <View style={styles.socTop}>
               <Ionicons name="battery-charging" size={16} color={getSoCColor()} />
-              <Text style={[styles.socValue, { color: getSoCColor() }]}>{currentSoC}%</Text>
+              <Text style={[styles.socValue, { color: getSoCColor() }]}>{currentSOC}%</Text>
             </View>
             <Text style={styles.socRange}>
-              ~{Math.round(currentSoC * ((userProfile.vehicle.realWorldRangeKm / 100) || 4.2))}km
+              ~{estimatedRange}km
             </Text>
             <Text style={styles.socStatus}>{getSoCStatus()}</Text>
           </View>
@@ -993,6 +828,7 @@ export default function HomeScreen() {
                   activeOpacity={0.7}
                 >
                   <View style={styles.stationLeft}>
+                    {/* --- FIXED: Apply style inline --- */}
                     <View style={[
                       styles.stationIconContainer,
                       { backgroundColor: getStatusBackgroundColor(station.status) }
@@ -1019,6 +855,7 @@ export default function HomeScreen() {
                     <Text style={styles.stationDistance}>
                       {station.distance?.toFixed(1)} km
                     </Text>
+                    {/* --- FIXED: Apply style inline --- */}
                     <View style={[
                       styles.statusBadge,
                       { backgroundColor: getStatusBackgroundColor(station.status) }
@@ -1055,89 +892,6 @@ export default function HomeScreen() {
           <View style={styles.bottomSpacer} />
         </ScrollView>
       </Animated.View>
-
-      {/* Enhanced SoC Modal */}
-      <Modal
-        visible={socModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSocModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>Update Battery Level</Text>
-                <Text style={styles.modalSubtitle}>
-                  Current: {currentSoC}% • {getSoCStatus()}
-                </Text>
-              </View>
-              <TouchableOpacity 
-                onPress={() => setSocModalVisible(false)}
-                style={styles.modalClose}
-              >
-                <Ionicons name="close" size={22} color="#64748b" />
-              </TouchableOpacity>
-            </View>
-            
-            <View style={styles.socInputWrapper}>
-              <View style={styles.socInputContainer}>
-                <TextInput
-                  style={styles.socInput}
-                  value={tempSoC}
-                  onChangeText={setTempSoC}
-                  keyboardType="numeric"
-                  placeholder="85"
-                  maxLength={3}
-                  placeholderTextColor="#cbd5e1"
-                  selectTextOnFocus
-                />
-                <Text style={styles.socUnit}>%</Text>
-              </View>
-              <Text style={styles.socInputHint}>Enter value between 0-100</Text>
-            </View>
-
-            <View style={styles.quickSocButtons}>
-              {[25, 50, 75, 100].map((value) => (
-                <TouchableOpacity
-                  key={value}
-                  style={[
-                    styles.quickSocButton,
-                    parseInt(tempSoC) === value && styles.quickSocButtonActive
-                  ]}
-                  onPress={() => setTempSoC(value.toString())}
-                >
-                  <Text style={[
-                    styles.quickSocText,
-                    parseInt(tempSoC) === value && styles.quickSocTextActive
-                  ]}>
-                    {value}%
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => {
-                  setTempSoC(currentSoC.toString());
-                  setSocModalVisible(false);
-                }}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.updateButton]}
-                onPress={updateSoC}
-              >
-                <Ionicons name="checkmark" size={18} color="#fff" style={styles.buttonIcon} />
-                <Text style={styles.updateButtonText}>Update</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {/* Station Detail Sheet */}
       <StationDetailSheet
@@ -1311,6 +1065,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
+    // backgroundColor removed
   },
   searchResultText: {
     marginLeft: 10,
@@ -1567,6 +1322,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
+    // backgroundColor removed
   },
   stationInfo: {
     flex: 1,
@@ -1613,16 +1369,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
+    // backgroundColor removed
   },
   statusDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
+    // backgroundColor removed (will be set inline)
   },
   statusText: {
     fontSize: 10,
     fontWeight: '700',
     textTransform: 'capitalize',
+    // color removed (will be set inline)
   },
   stationArrow: {
     width: 24,
@@ -1662,307 +1421,5 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 3,
-  },
-
-  // Enhanced Modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 16,
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 20,
-    width: '100%',
-    maxWidth: 320,
-    elevation: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#0f172a',
-    marginBottom: 3,
-  },
-  modalSubtitle: {
-    fontSize: 12,
-    color: '#64748b',
-    fontWeight: '500',
-  },
-  modalClose: {
-    padding: 2,
-  },
-  socInputWrapper: {
-    marginBottom: 16,
-  },
-  socInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: COLORS.primary,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#f8fafc',
-  },
-  socInput: {
-    fontSize: 38,
-    fontWeight: '800',
-    color: COLORS.primary,
-    textAlign: 'center',
-    minWidth: 100,
-  },
-  socUnit: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#94a3b8',
-    marginLeft: 6,
-  },
-  socInputHint: {
-    fontSize: 11,
-    color: '#94a3b8',
-    textAlign: 'center',
-    marginTop: 6,
-    fontWeight: '500',
-  },
-  quickSocButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-    gap: 6,
-  },
-  quickSocButton: {
-    flex: 1,
-    paddingVertical: 10,
-    backgroundColor: '#f1f5f9',
-    borderRadius: 10,
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: '#e2e8f0',
-  },
-  quickSocButtonActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  quickSocText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  quickSocTextActive: {
-    color: '#fff',
-  },
-  modalActions: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: 13,
-    borderRadius: 12,
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  cancelButton: {
-    backgroundColor: '#f1f5f9',
-    borderWidth: 1.5,
-    borderColor: '#e2e8f0',
-  },
-  cancelButtonText: {
-    color: '#64748b',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  updateButton: {
-    backgroundColor: COLORS.primary,
-    elevation: 3,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-  },
-  updateButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-
-  // Station Detail Sheet Styles
-  sheetOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    justifyContent: 'flex-end',
-  },
-  sheetBackdrop: {
-    flex: 1,
-  },
-  sheetContainer: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingTop: 12,
-    paddingHorizontal: 20,
-    paddingBottom: 34,
-    maxHeight: SCREEN_HEIGHT * 0.75,
-    elevation: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-  },
-  sheetHandle: {
-    width: 40,
-    height: 4,
-    backgroundColor: '#e2e8f0',
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: 20,
-  },
-  sheetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  sheetHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  sheetStationIcon: {
-    width: 54,
-    height: 54,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 14,
-  },
-  sheetHeaderText: {
-    flex: 1,
-  },
-  sheetStationName: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#0f172a',
-    marginBottom: 8,
-  },
-  sheetStatusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-  },
-  sheetStatusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  sheetStatusText: {
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'capitalize',
-  },
-  sheetCloseButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#f1f5f9',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 12,
-  },
-  sheetContent: {
-    flex: 1,
-  },
-  sheetDetailItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-  },
-  sheetDetailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  sheetDetailText: {
-    fontSize: 15,
-    color: '#475569',
-    fontWeight: '500',
-    marginLeft: 12,
-    flex: 1,
-  },
-  sheetServicesContainer: {
-    paddingVertical: 16,
-  },
-  sheetServicesTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0f172a',
-    marginBottom: 10,
-  },
-  sheetServices: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  sheetServiceTag: {
-    backgroundColor: '#f1f5f9',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  sheetServiceText: {
-    fontSize: 12,
-    color: '#475569',
-    fontWeight: '600',
-  },
-  sheetFooter: {
-    paddingTop: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
-  },
-  sheetNavigateButton: {
-    backgroundColor: COLORS.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    borderRadius: 16,
-    elevation: 4,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    gap: 8,
-  },
-  sheetNavigateButtonDisabled: {
-    backgroundColor: '#94a3b8',
-    elevation: 0,
-    shadowOpacity: 0,
-  },
-  sheetNavigateText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
   },
 });
