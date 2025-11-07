@@ -44,7 +44,17 @@ export default function ProfileStackLayout() {
         name="contribute-station"
         options={{ title: 'Contribute Station' }}
       />
+      
+      {/* --- NEW SCREEN --- */}
+      {/* This screen will open as a modal */}
+      <Stack.Screen
+        name="vehicle-status"
+        options={{ 
+          title: 'Vehicle Status',
+          presentation: 'modal',
+          headerShown: false, // We use a custom header in the file
+        }} 
+      />
     </Stack>
   );
 }
-

@@ -1,9 +1,15 @@
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
-import { doc, DocumentData, getDoc, onSnapshot } from 'firebase/firestore';
+// --- MODIFICATION: Added updateDoc ---
+import { doc, DocumentData, getDoc, onSnapshot, updateDoc } from 'firebase/firestore';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { auth, db } from '../services/firebase';
 
-// This UserProfile type is now the single source of truth for what a user's data looks like.
+// --- NEW INTERFACE ---
+export interface VehicleState {
+  currentSOC: number; // Stored as 0-100
+  lastUpdated: string; // ISO 8601 string
+}
+
 export interface UserProfile extends DocumentData {
   uid: string;
   username: string;
@@ -16,20 +22,22 @@ export interface UserProfile extends DocumentData {
     batteryCapacityKWh: number;
     realWorldRangeKm: number;
   };
+  // --- NEW FIELD ---
+  vehicleState?: VehicleState;
 }
 
-// The AuthState will now tell the app if the user is logged out, needs to verify, or is fully authenticated.
 type AuthState = {
   user: User | null;
   userProfile: UserProfile | null;
-  isAuthenticated: boolean; // True only if logged in AND verified
+  isAuthenticated: boolean;
   isLoading: boolean;
 };
 
-// The ContextType now includes the AuthState and the functions
 interface AuthContextType extends AuthState {
   onLogout: () => Promise<void>;
   refreshUserProfile: () => Promise<void>;
+  // --- NEW FUNCTION ---
+  updateVehicleState: (newState: Partial<VehicleState>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -39,6 +47,8 @@ const AuthContext = createContext<AuthContextType>({
   isLoading: true,
   onLogout: async () => {},
   refreshUserProfile: async () => {},
+  // --- NEW FUNCTION DEFAULT ---
+  updateVehicleState: async () => {},
 });
 
 export const useAuth = () => {
@@ -46,7 +56,6 @@ export const useAuth = () => {
 };
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  // All auth state is now managed in a single object
   const [authState, setAuthState] = useState<AuthState>({
     user: null,
     userProfile: null,
@@ -54,49 +63,56 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     isLoading: true,
   });
 
-  // --- This is the new, smarter logic ---
   useEffect(() => {
-    // onAuthStateChanged is the core Firebase listener for authentication status.
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
-        // 1. Always get the latest user data from Firebase.
         await currentUser.reload();
 
-        // 2. Check if the user's email has been verified.
         if (currentUser.emailVerified) {
-          // 3. If verified, listen for real-time profile updates from Firestore.
           const userDocRef = doc(db, 'users', currentUser.uid);
-          // onSnapshot provides real-time updates (e.g., if a role changes).
           const unsubscribeSnapshot = onSnapshot(userDocRef, (userDoc) => {
             if (userDoc.exists()) {
               const profileData = { uid: currentUser.uid, ...userDoc.data() } as UserProfile;
-              // User is fully authenticated and has a profile.
+              
+              // --- MODIFICATION: Ensure vehicleState is initialized if it's missing ---
+              // This is a safety net in case vehicle creation failed to set it.
+              let finalProfileData = profileData;
+              if (profileData.vehicle && !profileData.vehicleState) {
+                console.warn("AuthContext: User has vehicle but no vehicleState. Initializing.");
+                finalProfileData = {
+                  ...profileData,
+                  vehicleState: {
+                    currentSOC: 100,
+                    lastUpdated: new Date().toISOString(),
+                  },
+                };
+                // Asynchronously update this in Firestore so it's fixed for next time
+                updateDoc(userDocRef, {
+                  vehicleState: finalProfileData.vehicleState
+                }).catch(err => console.error("Failed to auto-init vehicleState:", err));
+              }
+
               setAuthState({
                 user: currentUser,
-                userProfile: profileData,
-                isAuthenticated: true, // They are fully authenticated
+                userProfile: finalProfileData, // Use the potentially modified data
+                isAuthenticated: true,
                 isLoading: false,
               });
             } else {
-              // This is a rare case where the auth user exists but has no profile document.
-              // Treat them as unauthenticated and force a logout.
               setAuthState({ user: null, userProfile: null, isAuthenticated: false, isLoading: false });
               signOut(auth);
             }
           });
-          return () => unsubscribeSnapshot(); // Clean up the profile listener
+          return () => unsubscribeSnapshot();
         } else {
-          // 4. If not verified, the user is logged in but not fully authenticated.
-          // The app will use this state to show the 'verify-email' screen.
           setAuthState({
             user: currentUser,
             userProfile: null,
-            isAuthenticated: false, // They are NOT fully authenticated yet
+            isAuthenticated: false,
             isLoading: false,
           });
         }
       } else {
-        // 5. If there is no user, they are logged out.
         setAuthState({
           user: null,
           userProfile: null,
@@ -106,7 +122,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     });
 
-    return () => unsubscribe(); // Clean up the auth listener
+    return () => unsubscribe();
   }, []);
 
   const onLogout = async () => {
@@ -117,7 +133,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  // This function allows screens like 'Edit Profile' to force a data refresh
   const refreshUserProfile = async () => {
     const currentUser = auth.currentUser;
     if (currentUser) {
@@ -138,13 +153,52 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  // Provide the state and functions to the app
+  // --- NEW FUNCTION IMPLEMENTATION ---
+  /**
+   * Updates the vehicle's state in both React context and Firestore.
+   */
+  const updateVehicleState = async (newState: Partial<VehicleState>) => {
+    const currentUser = auth.currentUser;
+    if (!currentUser || !authState.userProfile) {
+      console.error("Cannot update vehicle state: no user found.");
+      return;
+    }
+
+    // 1. Optimistically update local React state for instant UI response
+    const newVehicleState: VehicleState = {
+      ...authState.userProfile.vehicleState!,
+      ...newState,
+      lastUpdated: new Date().toISOString(), // Always update timestamp
+    };
+
+    setAuthState(prevState => ({
+      ...prevState,
+      userProfile: {
+        ...prevState.userProfile!,
+        vehicleState: newVehicleState,
+      },
+    }));
+
+    // 2. Asynchronously update Firestore
+    try {
+      const userDocRef = doc(db, 'users', currentUser.uid);
+      await updateDoc(userDocRef, {
+        vehicleState: newVehicleState
+      });
+    } catch (error) {
+      console.error("Failed to update vehicle state in Firestore:", error);
+      // Optional: Add logic to revert local state or show an error
+    }
+  };
+
+
   const value = {
     ...authState,
     onLogout,
     refreshUserProfile,
+    // --- NEW FUNCTION EXPORT ---
+    updateVehicleState,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
-

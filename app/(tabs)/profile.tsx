@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import {
   Car,
-  ChevronRight, // New Icon
+  ChevronRight,
   Edit,
   LogOut,
   MapPin,
@@ -9,7 +9,17 @@ import {
   Settings,
   User,
 } from 'lucide-react-native';
-import React from 'react';
+// --- NEW IMPORTS ---
+import {
+  addDoc,
+  collection,
+  getDocs,
+  query
+} from 'firebase/firestore';
+import React, { useEffect, useState } from 'react';
+import { vehicleData } from '../../constants/vehicles';
+import { db } from '../../services/firebase';
+// --- END NEW IMPORTS ---
 import {
   Alert,
   SafeAreaView,
@@ -26,6 +36,49 @@ import { useAuth } from '../../context/AuthContext';
 export default function ProfileScreen() {
   const router = useRouter();
   const { userProfile, onLogout } = useAuth();
+  
+  // --- NEW: ONE-TIME UPLOAD LOGIC ---
+  const [hasUploaded, setHasUploaded] = useState(false);
+  useEffect(() => {
+    const uploadVehiclesOnce = async () => {
+      if (hasUploaded) return; // Don't run more than once
+      setHasUploaded(true); // Set flag immediately
+
+      try {
+        // 1. Check if vehicles are already in the database
+        const vehiclesCollectionRef = collection(db, 'vehicles');
+        const existingVehicles = await getDocs(query(vehiclesCollectionRef));
+        
+        if (existingVehicles.size > 0) {
+          console.log('[Vehicle Uploader]: Vehicles collection already exists. Skipping upload.');
+          return; // Don't upload if data is already there
+        }
+
+        // 2. If no vehicles, start the upload
+        console.log('[Vehicle Uploader]: Starting vehicle data upload to Firestore...');
+        let successCount = 0;
+
+        for (const vehicle of vehicleData) {
+          // Use the 'vehicle' object directly
+          await addDoc(vehiclesCollectionRef, vehicle);
+          console.log(`[Vehicle Uploader]: Added: ${vehicle.make} ${vehicle.model}`);
+          successCount++;
+        }
+
+        console.log(`[Vehicle Uploader]: --- Upload Complete ---`);
+        console.log(`[Vehicle Uploader]: Successfully uploaded ${successCount} vehicles.`);
+        Alert.alert('Database Updated', `Successfully uploaded ${successCount} vehicles to Firestore.`);
+
+      } catch (error) {
+        console.error('[Vehicle Uploader]: Error:', error);
+        Alert.alert('Upload Error', 'Failed to upload vehicle list.');
+      }
+    };
+
+    // Run the upload logic when the profile screen is loaded
+    uploadVehiclesOnce();
+  }, [hasUploaded]); // The 'hasUploaded' dependency ensures it only runs once per component mount
+  // --- END NEW: ONE-TIME UPLOAD LOGIC ---
 
   const handleMenuPress = (item: string) => {
     // Navigate to the correct screen based on the title
@@ -296,4 +349,3 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
   },
 });
-

@@ -1,20 +1,65 @@
 import { useRouter } from 'expo-router';
-import { doc, updateDoc } from 'firebase/firestore';
-// --- THIS IS THE FIX ---
-// We must import 'useState' from the 'react' library before using it.
-import React, { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { collection, doc, getDocs, updateDoc } from 'firebase/firestore';
+// --- We now import useState and useEffect ---
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { StyledButton } from '../../components/StyledComponents';
 import { COLORS, FONTS, SPACING } from '../../constants/colors';
-import { Vehicle, vehicleData } from '../../constants/vehicles';
+// --- We no longer import vehicleData, but we keep Vehicle type ---
+import { Vehicle } from '../../constants/vehicles';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../services/firebase';
 
 export default function AddVehicleScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, userProfile, refreshUserProfile } = useAuth(); // Get refreshUserProfile
+  
+  // --- NEW: State for loading vehicles from Firestore ---
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false); // For saving
+  const [isFetching, setIsFetching] = useState(true); // For fetching vehicles
+
+  // --- NEW: Fetch vehicles from Firestore on component mount ---
+  useEffect(() => {
+    const fetchVehicles = async () => {
+      try {
+        setIsFetching(true);
+        const vehiclesCollectionRef = collection(db, 'vehicles');
+        const querySnapshot = await getDocs(vehiclesCollectionRef);
+        
+        const fetchedVehicles: Vehicle[] = querySnapshot.docs.map(doc => {
+          const data = doc.data();
+          // Note: We use the doc.id as the vehicle ID
+          return {
+            id: doc.id,
+            make: data.make,
+            model: data.model,
+            batteryCapacityKWh: data.batteryCapacityKWh,
+            realWorldRangeKm: data.realWorldRangeKm,
+          } as Vehicle;
+        });
+
+        // Sort by make then model
+        fetchedVehicles.sort((a, b) => {
+          if (a.make < b.make) return -1;
+          if (a.make > b.make) return 1;
+          if (a.model < b.model) return -1;
+          if (a.model > b.model) return 1;
+          return 0;
+        });
+
+        setVehicles(fetchedVehicles);
+      } catch (error) {
+        console.error("Error fetching vehicles: ", error);
+        Alert.alert('Error', 'Failed to load vehicle list. Please check your connection.');
+      } finally {
+        setIsFetching(false);
+      }
+    };
+
+    fetchVehicles();
+  }, []);
 
   const handleSaveVehicle = async () => {
     if (!selectedVehicle || !user) {
@@ -27,12 +72,19 @@ export default function AddVehicleScreen() {
       const userDocRef = doc(db, 'users', user.uid);
       await updateDoc(userDocRef, {
         vehicle: {
+          id: selectedVehicle.id, // --- NEW: Save the vehicle's Firestore ID
           make: selectedVehicle.make,
           model: selectedVehicle.model,
           batteryCapacityKWh: selectedVehicle.batteryCapacityKWh,
           realWorldRangeKm: selectedVehicle.realWorldRangeKm,
         },
       });
+
+      // --- NEW: Refresh the auth context to get the new vehicle data ---
+      if (refreshUserProfile) {
+        await refreshUserProfile();
+      }
+
       // Navigate back to the home screen after saving
       router.replace('/(tabs)/home');
     } catch (error) {
@@ -43,6 +95,16 @@ export default function AddVehicleScreen() {
     }
   };
 
+  // --- NEW: Loading state ---
+  if (isFetching) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text style={styles.loadingText}>Loading vehicle models...</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Select Your Vehicle</Text>
@@ -50,7 +112,8 @@ export default function AddVehicleScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.vehicleList}>
-          {vehicleData.map((vehicle) => (
+          {/* --- MODIFIED: Map over 'vehicles' state instead of 'vehicleData' --- */}
+          {vehicles.map((vehicle) => (
             <TouchableOpacity
               key={vehicle.id}
               style={[
@@ -82,6 +145,18 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: SPACING.lg,
     backgroundColor: COLORS.backgroundLight,
+  },
+  // --- NEW: Loading container styles ---
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.backgroundLight,
+  },
+  loadingText: {
+    marginTop: SPACING.md,
+    fontSize: FONTS.sizes.base,
+    color: COLORS.textSecondary,
   },
   title: {
     fontSize: FONTS.sizes.xxl,
@@ -124,4 +199,3 @@ const styles = StyleSheet.create({
     marginTop: SPACING.md,
   },
 });
-
