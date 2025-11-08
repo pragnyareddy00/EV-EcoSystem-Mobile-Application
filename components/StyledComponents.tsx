@@ -11,7 +11,7 @@ import {
   View,
   ViewProps,
 } from 'react-native';
-import { COLORS, FONTS, RADIUS, SPACING } from '../constants/colors';
+import { COLORS, FONTS, RADIUS, SHADOWS, SPACING } from '../constants/colors'; // Import SHADOWS
 
 // Styled Button Component
 interface StyledButtonProps extends TouchableOpacityProps {
@@ -60,7 +60,7 @@ export const StyledButton: React.FC<StyledButtonProps> = ({
       {loading ? (
         <ActivityIndicator
           color={variant === 'primary' || variant === 'danger' || variant === 'success'
-            ? COLORS.textWhite
+            ? COLORS.white // Use COLORS.white
             : COLORS.primary}
           size="small"
         />
@@ -98,7 +98,7 @@ export const StyledTextInput: React.FC<StyledTextInputProps> = ({
     <View style={styles.inputContainer}>
       {label && <Text style={styles.inputLabel}>{label}</Text>}
       <View style={[
-        styles.inputWrapper, 
+        styles.inputWrapper,
         styles[`inputWrapper_${variant}`],
         error && styles.inputWrapperError
       ]}>
@@ -228,11 +228,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 3,
+    ...SHADOWS.md, // Use shadow object
     position: 'relative',
     overflow: 'hidden',
   },
@@ -244,19 +240,21 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.backgroundLight,
     borderWidth: 1.5,
     borderColor: COLORS.border,
+    elevation: 0, // secondary buttons shouldn't have shadow
   },
   button_outline: {
     backgroundColor: 'transparent',
     borderWidth: 2,
     borderColor: COLORS.primary,
+    elevation: 0, // outline buttons shouldn't have shadow
   },
   button_danger: {
     backgroundColor: COLORS.error,
     shadowColor: COLORS.error,
   },
   button_success: {
-    backgroundColor: '#10B981', // Modern green
-    shadowColor: '#10B981',
+    backgroundColor: COLORS.success,
+    shadowColor: COLORS.success,
   },
   button_small: {
     height: 42,
@@ -269,8 +267,8 @@ const styles = StyleSheet.create({
   },
   button_large: {
     height: 60,
-    paddingHorizontal: SPACING.xxl || SPACING.xl,
-    borderRadius: RADIUS.xxl || RADIUS.xl,
+    paddingHorizontal: SPACING.xxl,
+    borderRadius: RADIUS.xxl,
   },
   buttonFullWidth: {
     alignSelf: 'stretch',
@@ -288,12 +286,12 @@ const styles = StyleSheet.create({
     marginRight: SPACING.sm,
   },
   buttonText: {
-    fontFamily: FONTS.semibold || FONTS.medium,
-    fontWeight: '600',
+    fontFamily: FONTS.family.semibold, // Use family
+    fontWeight: FONTS.weights.semibold, // Use weights
     letterSpacing: 0.5,
   },
   buttonText_primary: {
-    color: COLORS.textWhite,
+    color: COLORS.white, // Use COLORS.white
     fontSize: FONTS.sizes.base,
   },
   buttonText_secondary: {
@@ -305,11 +303,11 @@ const styles = StyleSheet.create({
     fontSize: FONTS.sizes.base,
   },
   buttonText_danger: {
-    color: COLORS.textWhite,
+    color: COLORS.white, // Use COLORS.white
     fontSize: FONTS.sizes.base,
   },
   buttonText_success: {
-    color: COLORS.textWhite,
+    color: COLORS.white, // Use COLORS.white
     fontSize: FONTS.sizes.base,
   },
   buttonText_small: {
@@ -331,10 +329,10 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontSize: FONTS.sizes.sm,
-    fontWeight: '600',
+    fontWeight: FONTS.weights.semibold, // Use weights
     color: COLORS.textPrimary,
     marginBottom: SPACING.sm,
-    fontFamily: FONTS.medium,
+    fontFamily: FONTS.family.medium, // Use family
   },
   inputWrapper: {
     flexDirection: 'row',
@@ -358,13 +356,13 @@ const styles = StyleSheet.create({
   },
   inputWrapperError: {
     borderColor: COLORS.error,
-    backgroundColor: '#FFF5F5',
+    backgroundColor: COLORS.errorLight, // Use semantic color
   },
   input: {
     flex: 1,
     fontSize: FONTS.sizes.base,
     color: COLORS.textPrimary,
-    fontFamily: FONTS.regular,
+    fontFamily: FONTS.family.regular, // Use family
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.lg,
   },
@@ -393,35 +391,27 @@ const styles = StyleSheet.create({
     color: COLORS.error,
     marginTop: SPACING.xs,
     marginLeft: SPACING.md,
-    fontFamily: FONTS.medium,
+    fontFamily: FONTS.family.medium, // Use family
   },
   inputHelper: {
     fontSize: FONTS.sizes.xs,
     color: COLORS.textMuted,
     marginTop: SPACING.xs,
     marginLeft: SPACING.md,
-    fontFamily: FONTS.regular,
+    fontFamily: FONTS.family.regular, // Use family
   },
 
   // Enhanced Card Styles
   card: {
-    backgroundColor: COLORS.background,
-    borderRadius: RADIUS.xxl || RADIUS.xl,
+    backgroundColor: COLORS.background, // Use background, not backgroundCard
+    borderRadius: RADIUS.xxl, // Use single value
     marginBottom: SPACING.md,
   },
   card_default: {
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
+    ...SHADOWS.md, // Use shadow object
   },
   card_elevated: {
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 6,
+    ...SHADOWS.lg, // Use shadow object
   },
   card_outlined: {
     borderWidth: 1.5,
@@ -442,22 +432,22 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontSize: FONTS.sizes.lg,
-    fontWeight: '700',
+    fontWeight: FONTS.weights.bold, // Use weights
     color: COLORS.textPrimary,
-    fontFamily: FONTS.bold || FONTS.medium,
+    fontFamily: FONTS.family.bold, // Use family
     marginBottom: SPACING.xs,
   },
   cardSubtitle: {
     fontSize: FONTS.sizes.sm,
     color: COLORS.textSecondary,
-    fontFamily: FONTS.regular,
+    fontFamily: FONTS.family.regular, // Use family
   },
 
   // Status Badge Styles
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: RADIUS.full || RADIUS.xl,
+    borderRadius: RADIUS.full,
     paddingHorizontal: SPACING.sm,
   },
   badge_small: {
@@ -467,19 +457,19 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.sm,
   },
   badge_available: {
-    backgroundColor: '#ECFDF5', // Light green
+    backgroundColor: COLORS.successLight, // Use semantic color
   },
   badge_busy: {
-    backgroundColor: '#FEF3C7', // Light yellow
+    backgroundColor: COLORS.warningLight, // Use semantic color
   },
   badge_offline: {
-    backgroundColor: '#FEE2E2', // Light red
+    backgroundColor: COLORS.errorLight, // Use semantic color
   },
   badge_charging: {
-    backgroundColor: '#EBF8FF', // Light blue
+    backgroundColor: COLORS.infoLight, // Use semantic color
   },
   badge_low_battery: {
-    backgroundColor: '#FED7AA', // Light orange
+    backgroundColor: COLORS.accentWarning, // Use semantic color
   },
   badgeDot: {
     width: 8,
@@ -488,23 +478,23 @@ const styles = StyleSheet.create({
     marginRight: SPACING.xs,
   },
   badgeDot_available: {
-    backgroundColor: '#10B981', // Green
+    backgroundColor: COLORS.success, // Use semantic color
   },
   badgeDot_busy: {
-    backgroundColor: '#F59E0B', // Yellow
+    backgroundColor: COLORS.warning, // Use semantic color
   },
   badgeDot_offline: {
-    backgroundColor: '#EF4444', // Red
+    backgroundColor: COLORS.error, // Use semantic color
   },
   badgeDot_charging: {
-    backgroundColor: '#3B82F6', // Blue
+    backgroundColor: COLORS.info, // Use semantic color
   },
   badgeDot_low_battery: {
-    backgroundColor: '#F97316', // Orange
+    backgroundColor: COLORS.statusLowBattery, // Use semantic color
   },
   badgeText: {
-    fontWeight: '500',
-    fontFamily: FONTS.medium,
+    fontWeight: FONTS.weights.medium, // Use weights
+    fontFamily: FONTS.family.medium, // Use family
   },
   badgeText_small: {
     fontSize: FONTS.sizes.xs,
@@ -517,14 +507,10 @@ const styles = StyleSheet.create({
 
   // Info Card Styles
   infoCard: {
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.background, // Use background
     borderRadius: RADIUS.xl,
     padding: SPACING.lg,
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    ...SHADOWS.sm, // Use shadow object
     borderWidth: 1,
     borderColor: COLORS.border,
   },
@@ -548,14 +534,14 @@ const styles = StyleSheet.create({
   },
   infoCardTitle: {
     fontSize: FONTS.sizes.base,
-    fontWeight: '600',
+    fontWeight: FONTS.weights.semibold, // Use weights
     color: COLORS.textPrimary,
-    fontFamily: FONTS.medium,
+    fontFamily: FONTS.family.medium, // Use family
   },
   infoCardSubtitle: {
     fontSize: FONTS.sizes.sm,
     color: COLORS.textSecondary,
-    fontFamily: FONTS.regular,
+    fontFamily: FONTS.family.regular, // Use family
     marginTop: 2,
   },
   infoCardValue: {
@@ -563,15 +549,15 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
   },
   infoCardValueText: {
-    fontSize: FONTS.sizes.xxl || FONTS.sizes.xl,
-    fontWeight: '700',
+    fontSize: FONTS.sizes.xxl, // Use single value
+    fontWeight: FONTS.weights.bold, // Use weights
     color: COLORS.primary,
-    fontFamily: FONTS.bold || FONTS.medium,
+    fontFamily: FONTS.family.bold, // Use family
   },
   infoCardUnit: {
     fontSize: FONTS.sizes.sm,
     color: COLORS.textMuted,
     marginLeft: SPACING.xs,
-    fontFamily: FONTS.regular,
+    fontFamily: FONTS.family.regular, // Use family
   },
 });

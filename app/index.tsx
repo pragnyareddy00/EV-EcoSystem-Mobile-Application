@@ -8,7 +8,6 @@ import {
   Alert,
   Dimensions,
   GestureResponderEvent,
-  Image,
   StatusBar,
   StyleSheet,
   Text,
@@ -37,21 +36,24 @@ interface SkipButtonProps {
 
 // --- Custom Components ---
 const CustomDot: React.FC<DotProps> = ({ selected }) => (
-  <View 
+  <View
     style={[
-      styles.dot, 
-      { 
+      styles.dot,
+      {
         backgroundColor: selected ? '#007BFF' : '#D1D5DB',
-        transform: [{ scale: selected ? 1.2 : 1 }]
-      }
-    ]} 
+        transform: [{ scale: selected ? 1.2 : 1 }],
+      },
+    ]}
   />
 );
 
-const CustomDoneButton: React.FC<DoneButtonProps> = ({ onPress, disabled = false }) => (
+const CustomDoneButton: React.FC<DoneButtonProps> = ({
+  onPress,
+  disabled = false,
+}) => (
   <View style={styles.buttonWrapper}>
-    <TouchableOpacity 
-      style={[styles.buttonContainer, disabled && styles.buttonDisabled]} 
+    <TouchableOpacity
+      style={[styles.buttonContainer, disabled && styles.buttonDisabled]}
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
@@ -66,15 +68,20 @@ const CustomDoneButton: React.FC<DoneButtonProps> = ({ onPress, disabled = false
         end={{ x: 1, y: 0 }}
       >
         <Text style={styles.buttonText}>Get Started</Text>
-        <Ionicons name="arrow-forward" size={20} color="#FFFFFF" style={styles.buttonIcon} />
+        <Ionicons
+          name="arrow-forward"
+          size={20}
+          color="#FFFFFF"
+          style={styles.buttonIcon}
+        />
       </LinearGradient>
     </TouchableOpacity>
   </View>
 );
 
 const CustomSkipButton: React.FC<SkipButtonProps> = ({ onPress }) => (
-  <TouchableOpacity 
-    style={styles.skipButton} 
+  <TouchableOpacity
+    style={styles.skipButton}
     onPress={onPress}
     accessibilityRole="button"
     accessibilityLabel="Skip"
@@ -103,15 +110,18 @@ const OnboardingScreen: React.FC = () => {
 
   const handleComplete = async () => {
     if (isLoading) return;
-    
+
     setIsLoading(true);
     try {
       await AsyncStorage.setItem('hasOnboarded', 'true');
-      await AsyncStorage.setItem('onboardingCompletedAt', new Date().toISOString());
-      
+      await AsyncStorage.setItem(
+        'onboardingCompletedAt',
+        new Date().toISOString()
+      );
+
       // Small delay for better UX
       setTimeout(() => {
-        router.replace('/login');
+        router.replace('/(auth)/login'); // Corrected path to login
       }, 500);
     } catch (error) {
       console.error('Failed to save onboarding status:', error);
@@ -129,7 +139,7 @@ const OnboardingScreen: React.FC = () => {
       'You can always view this information later in Settings.',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Skip', onPress: handleComplete }
+        { text: 'Skip', onPress: handleComplete },
       ]
     );
   };
@@ -139,50 +149,53 @@ const OnboardingScreen: React.FC = () => {
       backgroundColor: '#F8F9FA',
       image: (
         <View style={styles.imageContainer}>
-          <Image 
-            source={require('../assets/images/onboarding1.png')} 
-            style={styles.image}
-            resizeMode="contain"
-          />
+          {/* TEMPORARY PLACEHOLDER FOR TESTING */}
+          <View style={[styles.image, styles.placeholderImage]}>
+            <Ionicons name="map-outline" size={80} color="#999" />
+            <Text style={styles.placeholderText}>Image 1 Placeholder</Text>
+          </View>
         </View>
       ),
       title: 'Intelligent Station Discovery',
-      subtitle: "Find verified stations with our real-time 'Station Confidence Index' for reliable charging",
+      subtitle:
+        "Find verified stations with our real-time 'Station Confidence Index' for reliable charging",
     },
     {
       backgroundColor: '#F8F9FA',
       image: (
         <View style={styles.imageContainer}>
-          <Image 
-            source={require('../assets/images/onboarding2.png')} 
-            style={styles.image}
-            resizeMode="contain"
-          />
+          {/* TEMPORARY PLACEHOLDER FOR TESTING */}
+          <View style={[styles.image, styles.placeholderImage]}>
+            <Ionicons name="battery-charging-outline" size={80} color="#999" />
+            <Text style={styles.placeholderText}>Image 2 Placeholder</Text>
+          </View>
         </View>
       ),
       title: 'Personal Battery DNA',
-      subtitle: 'Our AI learns your car and driving style for hyper-accurate range predictions and optimal charging',
+      subtitle:
+        'Our AI learns your car and driving style for hyper-accurate range predictions and optimal charging',
     },
     {
       backgroundColor: '#F8F9FA',
       image: (
         <View style={styles.imageContainer}>
-          <Image 
-            source={require('../assets/images/onboarding3.png')} 
-            style={styles.image}
-            resizeMode="contain"
-          />
+          {/* TEMPORARY PLACEHOLDER FOR TESTING */}
+          <View style={[styles.image, styles.placeholderImage]}>
+            <Ionicons name="people-outline" size={80} color="#999" />
+            <Text style={styles.placeholderText}>Image 3 Placeholder</Text>
+          </View>
         </View>
       ),
       title: 'Powering the EV Community',
-      subtitle: 'Join fellow drivers to verify stations, report wait times, and find the perfect charging bay together',
+      subtitle:
+        'Join fellow drivers to verify stations, report wait times, and find the perfect charging bay together',
     },
   ];
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#F8F9FA" />
-      
+
       <Onboarding
         pages={onboardingPages}
         onDone={handleComplete}
@@ -196,7 +209,6 @@ const OnboardingScreen: React.FC = () => {
         DoneButtonComponent={(props) => <CustomDoneButton {...props} />}
         SkipButtonComponent={CustomSkipButton}
         DotComponent={CustomDot}
-        
         // Custom styles
         containerStyles={styles.onboardingContainer}
         imageContainerStyles={styles.onboardingImageContainer}
@@ -233,6 +245,21 @@ const styles = StyleSheet.create({
     height: Math.min(screenWidth * 0.8, 300),
     maxWidth: 300,
     maxHeight: 300,
+  },
+  // Added styles for the placeholder
+  placeholderImage: {
+    backgroundColor: '#e0e0e0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#ccc',
+    borderStyle: 'dashed',
+  },
+  placeholderText: {
+    color: '#999',
+    fontSize: 16,
+    marginTop: 10,
   },
   title: {
     fontSize: screenWidth > 375 ? 28 : 24,
