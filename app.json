@@ -23,7 +23,7 @@
       "package": "com.abhinav031.EVEcoSystemMobileApplication",
       "config": {
         "googleMaps": {
-          "apiKey": "${EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}"
+          "apiKey": "@EXPO_PUBLIC_GOOGLE_MAPS_API_KEY"
         }
       }
     },
