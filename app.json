@@ -1,70 +1,61 @@
 {
   "expo": {
-    "name": "EV-EcoSystem",
+    "name": "EV-EcoSystem-Mobile-Application",
     "slug": "EV-EcoSystem-Mobile-Application",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
     "scheme": "evecosystemmobileapplication",
     "userInterfaceStyle": "automatic",
-    "icon": "./assets/images/icon.png",
-    "splash": {
-      "image": "./assets/images/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
+    "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.abhinav031.eveco",
-      "config": {
-        "googleMapsApiKey": "${EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}"
-      }
+      "supportsTablet": true
     },
     "android": {
-      "package": "com.abhinav031.EVEcoSystemMobileApplication",
       "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
-        "backgroundColor": "#E6F4FE"
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "permissions": [
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION",
-        "INTERNET"
-      ],
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "package": "com.abhinav031.EVEcoSystemMobileApplication",
       "config": {
         "googleMaps": {
-          "apiKey": "${EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}"
+          "apiKey": "AIzaSyDpgh5Z4v3vf1Y2tTaal-BmrhcFfcL5UP0"
         }
       }
     },
     "web": {
+      "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
       "expo-router",
-      "expo-web-browser",
       [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "backgroundColor": "#ffffff",
+          "dark": {
+            "backgroundColor": "#000000"
+          }
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
     "extra": {
+      "router": {},
       "eas": {
         "projectId": "4687c7b2-1a47-4d7d-906b-56c8028ccbf3"
-      },
-      "firebase": {
-        "apiKey": "${EXPO_PUBLIC_FIREBASE_API_KEY}",
-        "authDomain": "${EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN}",
-        "projectId": "${EXPO_PUBLIC_FIREBASE_PROJECT_ID}",
-        "storageBucket": "${EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET}",
-        "messagingSenderId": "${EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID}",
-        "appId": "${EXPO_PUBLIC_FIREBASE_APP_ID}"
-      },
-      "googleMapsApiKey": "${EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}"
+      }
     }
   }
 }
