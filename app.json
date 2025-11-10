@@ -9,7 +9,12 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "We need your location to show nearby charging stations and navigate you to them.",
+        "NSCameraUsageDescription": "We need camera access to allow you to take photos for station contributions.",
+        "NSPhotoLibraryUsageDescription": "We need photo library access to allow you to upload images for station contributions."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -25,7 +30,14 @@
         "googleMaps": {
           "apiKey": "AIzaSyDpgh5Z4v3vf1Y2tTaal-BmrhcFfcL5UP0"
         }
-      }
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
       "output": "static",
@@ -54,7 +66,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "4687c7b2-1a47-4d7d-906b-56c8028ccbf3"
+        "projectId": "a038ed87-22c6-4354-91a7-335fb449f96e"
       }
     }
   }
