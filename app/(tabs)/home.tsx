@@ -159,8 +159,20 @@ export default function HomeScreen() {
               return null;
             }
 
-            const rawLat = data.latitude;
-            const rawLon = data.longitude;
+            // --- ROBUST LOCATION PARSING ---
+            // Check for top-level lat/lng first
+            let rawLat = data.latitude;
+            let rawLon = data.longitude;
+
+            // If not present, check inside a 'location' object (for GeoPoint)
+            if (rawLat === undefined || rawLon === undefined) {
+              if (data.location && typeof data.location.latitude === 'number' && typeof data.location.longitude === 'number') {
+                rawLat = data.location.latitude;
+                rawLon = data.location.longitude;
+              }
+            }
+            // --- END ROBUST LOCATION PARSING ---
+
             const rawName = data.name;
             const rawAddress = data.address;
             const rawPower = data.power;
@@ -196,8 +208,8 @@ export default function HomeScreen() {
               id: id,
               name: rawName?.trim() || 'Unknown Station',
               address: rawAddress?.trim() || 'Address not available',
-              latitude: lat,
-              longitude: lon,
+              latitude: lat, // Use parsed lat
+              longitude: lon, // Use parsed lon
               power: parseInt(rawPower, 10) || 0,
               status: status,
               type: type,
@@ -412,10 +424,6 @@ export default function HomeScreen() {
         } else {
           Alert.alert('No Stations', 'No charging stations found nearby. Please try again later.');
         }
-        break;
-      // --- MODIFIED: Navigate to our new screen ---
-      case 'routePlan':
-        router.push('/plan-route');
         break;
       // --- END MODIFICATION ---
       case 'emergency':

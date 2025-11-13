@@ -87,25 +87,6 @@ export default function TabsLayout() {
         }}
       />
       
-      {/* --- ADD THIS NEW SCREEN --- */}
-      <Tabs.Screen
-        name="plan-route"
-        options={{
-          href: null, // This hides it from the tab bar
-          title: 'Plan a Route',
-        }}
-      />
-      {/* --- END OF NEW SCREEN --- */}
-
-      <Tabs.Screen
-        name="trip-preview"
-        options={{
-          href: null, // This hides it from the tab bar
-          title: 'Trip Preview',
-          headerShown: false, // Optional: hide the header if you have a custom one
-        }}
-      />
-      
       {/* Admin tab - conditionally hidden using href: null for non-admin users */}
       <Tabs.Screen
         name="admin"
